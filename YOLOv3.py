@@ -141,6 +141,8 @@ class OutputParser(tf.keras.Model):
 
     def call(self, feats, calc_loss = False):
         
+        # output delta x,delta y are relative coordinate respect to upper left corner position (grid position) 
+        # output relative w, relative h are relative length respect to anchor absolute size 
         # feats.shape = batch x h x w x anchor_num x (1(delta x) + 1(delta y) + 1(width) + 1(height) + 1(object mask) + class_num(class probability))
         grid_shape = tf.shape(feats)[1:3]; #(height, width)
         # [x,y] = meshgrid(x,y) get the center coordinates of prior boxes
@@ -198,23 +200,12 @@ class YOLOv3Loss(tf.keras.Model):
             # objectness: object_mask.shape = (batch,h,w,anchor_num)
             object_mask = labels[l][..., 4:5];
             object_mask_bool = tf.cast(object_mask, dtype = tf.bool);
+            # 1) ignore masks
             # class type: true_class_probs.shape = (batch,h,w,anchor_num,class_num)
             true_class_probs = labels[l][...,5:];
             grid, raw_pred, pred_xy, pred_wh = OutputParser(self.anchors[self.anchor_mask[l]], self.class_num, input_shape)(outputs[l], calc_loss = True);
             # relative box coordinates: pred_box.shape = (batch,h,w,anchor_num,4)
             pred_box = tf.concat([pred_xy, pred_wh], axis = -1);
-            # anchor box ratios: anchors_tensor.shape = (anchor_num, 2)
-            anchors_tensor = tf.constant(self.anchors[self.anchor_mask[l]], dtype = tf.float32);
-            # (delta x, delta y) = (relative x, relative y) * (feature map.width, feature map.height) - (priorbox center x,priorbox center y)
-            # supervised box's relative x,y: raw_true_xy.shape = (batch,h,w,anchor_num,2)
-            raw_true_xy = labels[l][...,:2] * tf.reverse(grid_shapes[l], axis = [0]) - grid;
-            # (target width, target height) = (relative width, relative height) * (image.width, image.height) / (anchor width ratio, anchor height ratio)
-            # supervised box's relative w,h: raw_true_wh.shape = (batch,h,w,anchor_num,2)
-            raw_true_wh = tf.math.log(labels[l][..., 2:4] * tf.reverse(input_shape, axis = [0]) / anchors_tensor);
-            # filter out none object anchor boxes
-            raw_true_wh = tf.where(tf.stack([object_mask_bool,object_mask_bool], axis = -1), raw_true_wh, tf.zeros_like(raw_true_wh));
-            # 2 - relative width * relative height
-            box_loss_scale = 2 - labels[l][...,2:3] * labels[l][...,3:4];
             # boolean_mask doesnt support batch, so have to iterate over each of batch
             ignore_masks = list();
             for b in range(batch_size):
@@ -229,7 +220,19 @@ class YOLOv3Loss(tf.keras.Model):
                 ignore_masks.append(ignore_mask);
             # ignore_masks.shape = (batch, h, w, anchor_num)
             ignore_masks = tf.stack(ignore_masks);
-            
+            # 2) loss
+            # anchor box ratios: anchors_tensor.shape = (anchor_num, 2)
+            anchors_tensor = tf.constant(self.anchors[self.anchor_mask[l]], dtype = tf.float32);
+            # (delta x, delta y) = (relative x, relative y) * (feature map.width, feature map.height) - (priorbox center x,priorbox center y)
+            # supervised box's relative x,y: raw_true_xy.shape = (batch,h,w,anchor_num,2)
+            raw_true_xy = labels[l][...,:2] * tf.reverse(grid_shapes[l], axis = [0]) - grid;
+            # (target width, target height) = (relative width, relative height) * (image.width, image.height) / (anchor width ratio, anchor height ratio)
+            # supervised box's relative w,h: raw_true_wh.shape = (batch,h,w,anchor_num,2)
+            raw_true_wh = tf.math.log(labels[l][..., 2:4] * tf.cast(tf.reverse(input_shape, axis = [0]),dtype = tf.float32) / anchors_tensor);
+            # filter out none object anchor boxes
+            raw_true_wh = tf.where(tf.stack([object_mask_bool,object_mask_bool], axis = -1), raw_true_wh, tf.zeros_like(raw_true_wh));
+            # 2 - relative width * relative height
+            box_loss_scale = 2 - labels[l][...,2:3] * labels[l][...,3:4];
             # xy_loss = -raw_true_xy * log(sigmoid(raw_xy)) - (1-raw_true_xy) * log(1 - sigmoid(raw_xy))
             xy_loss = object_mask * box_loss_scale * tf.keras.losses.BinaryCrossentropy(from_logits = True)(raw_true_xy, raw_pred[...,0:2]);
             # wh_loss = (raw_true_wh - raw_wh)^2
