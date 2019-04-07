@@ -37,6 +37,7 @@ class ResBlock(tf.keras.Model):
     
     def call(self, inputs):
         
+        # resblock downscale the image size to half
         results = self.pad(inputs);
         results = self.convblock(results);
         for triple in self.triples:
@@ -59,6 +60,7 @@ class Body(tf.keras.Model):
     
     def call(self, inputs):
         
+        # body downscale the image size to 1/32
         results = self.cb1(inputs);
         results = self.rb1(results);
         results = self.rb2(results);
@@ -141,7 +143,7 @@ class OutputParser(tf.keras.Model):
         
         # feats.shape = batch x h x w x anchor_num x (1(delta x) + 1(delta y) + 1(width) + 1(height) + 1(object mask) + class_num(class probability))
         grid_shape = tf.shape(feats)[1:3]; #(height, width)
-        # [x,y] = meshgrid(x,y) get the center coordinates of prior boxes of this layer's feature map
+        # [x,y] = meshgrid(x,y) get the center coordinates of prior boxes
         grid_y = tf.tile(tf.reshape(tf.convert_to_tensor(range(grid_shape[0]), dtype = tf.float32),[-1, 1, 1, 1]),[1, grid_shape[1], 1, 1]);
         grid_x = tf.tile(tf.reshape(tf.convert_to_tensor(range(grid_shape[1]), dtype = tf.float32),[1, -1, 1, 1]),[grid_shape[0], 1, 1, 1]);
         grid = tf.concat([grid_x, grid_y], axis = -1);
@@ -149,10 +151,10 @@ class OutputParser(tf.keras.Model):
         feats = tf.reshape(feats, (-1, grid_shape[0], grid_shape[1], self.anchor_num, self.class_num + 5));
         # (relative x, relative y) = (delta x, delta y) + (priorbox center x,priorbox center y) / (feature map.width, feature map.height)
         # box_xy.shape = (batch,h,w,anchor_num,2)
-        box_xy = tf.math.sigmoid(feats[..., 0:2] + grid) / tf.reverse(grid_shape, axis = [0]);
+        box_xy = (tf.math.sigmoid(feats[..., 0:2]) + grid) / tf.cast(tf.reverse(grid_shape, axis = [0]),dtype = tf.float32);
         # (relative width, relative height) = (target width, target height) * (anchor width ratio, anchor height ratio) / (image.width, image.height)
         # box_wh.shape = (batch,h,w,anchor_num,2)
-        box_wh = tf.exp(feats[..., 2:4]) * self.anchors_tensor / tf.reverse(self.input_shape, axis = [0]);
+        box_wh = tf.exp(feats[..., 2:4]) * self.anchors_tensor / tf.cast(tf.reverse(self.input_shape, axis = [0]),dtype = tf.float32);
         # confidence of being an object
         box_confidence = tf.math.sigmoid(feats[..., 4:5]);
         # class confidence
@@ -171,6 +173,7 @@ class YOLOv3Loss(tf.keras.Model):
         super(YOLOv3Loss,self).__init__();
         self.num_layers = anchors.shape[0] // 3;
         self.anchors = anchors;
+        # which anchor ratios are used for each layer of output
         self.anchor_mask = [[6,7,8],[3,4,5],[0,1,2]] if self.num_layers == 3 else [[3,4,5],[0,1,2]];
         self.class_num = class_num;
         self.ignore_thresh = ignore_thresh;
@@ -183,16 +186,18 @@ class YOLOv3Loss(tf.keras.Model):
         # labels.shape is the same as outputs
         assert type(outputs) is tuple;
         assert len(outputs) == self.num_layers;
-        # get the input image size according to smallest output
+        # get the input image size according to first output layer
         input_shape = tf.shape(outputs[0])[1:3] * 32;
         # grid size of all layers
-        grid_shapes = [tf.shape(outputs[1])[1:3] for l in range(self.num_layers)];
+        grid_shapes = [tf.shape(outputs[l])[1:3] for l in range(self.num_layers)];
         # get batch size
         batch_size = tf.shape(outputs[0])[0];
+        batch_size_float = tf.cast(batch_size, dtype = tf.float32);
         loss = 0;
         for l in range(self.num_layers):
             # objectness: object_mask.shape = (batch,h,w,anchor_num)
-            object_mask = tf.cast(labels[l][..., 4:5], dtype = tf.bool);
+            object_mask = labels[l][..., 4:5];
+            object_mask_bool = tf.cast(object_mask, dtype = tf.bool);
             # class type: true_class_probs.shape = (batch,h,w,anchor_num,class_num)
             true_class_probs = labels[l][...,5:];
             grid, raw_pred, pred_xy, pred_wh = OutputParser(self.anchors[self.anchor_mask[l]], self.class_num, input_shape)(outputs[l], calc_loss = True);
@@ -207,14 +212,14 @@ class YOLOv3Loss(tf.keras.Model):
             # supervised box's relative w,h: raw_true_wh.shape = (batch,h,w,anchor_num,2)
             raw_true_wh = tf.math.log(labels[l][..., 2:4] * tf.reverse(input_shape, axis = [0]) / anchors_tensor);
             # filter out none object anchor boxes
-            raw_true_wh = tf.where(tf.stack([object_mask,object_mask], axis = -1), raw_true_wh, tf.zeros_like(raw_true_wh));
+            raw_true_wh = tf.where(tf.stack([object_mask_bool,object_mask_bool], axis = -1), raw_true_wh, tf.zeros_like(raw_true_wh));
             # 2 - relative width * relative height
             box_loss_scale = 2 - labels[l][...,2:3] * labels[l][...,3:4];
             # boolean_mask doesnt support batch, so have to iterate over each of batch
             ignore_masks = list();
             for b in range(batch_size):
                 # absolute coordinate of true boxes in this layer and current batch
-                true_box = tf.boolean_mask(labels[l][b,...,0:4], object_mask[b]);
+                true_box = tf.boolean_mask(labels[l][b,...,0:4], object_mask_bool[b]);
                 # iou.shape = (h,w,anchor_num,true_box_num)
                 iou = self.box_iou(pred_box[b], true_box);
                 # select a true box having the maximum iou for each anchor box: best_iou.shape = (h,w,anchor_num)
@@ -235,10 +240,10 @@ class YOLOv3Loss(tf.keras.Model):
                 (1 - object_mask) * tf.keras.losses.BinaryCrossentropy(from_logits = True)(object_mask, raw_pred[...,4:5]) * ignore_masks;
             class_loss = object_mask * tf.keras.losses.BinaryCrossentropy(from_logits = True)(true_class_probs, raw_pred[...,5:]);
             
-            xy_loss = tf.math.reduce_sum(xy_loss) / batch_size;
-            wh_loss = tf.math.reduce_sum(wh_loss) / batch_size;
-            confidence_loss = tf.math.reduce_sum(confidence_loss) / batch_size;
-            class_loss = tf.math.reduce_sum(class_loss) / batch_size;
+            xy_loss = tf.math.reduce_sum(xy_loss) / batch_size_float;
+            wh_loss = tf.math.reduce_sum(wh_loss) / batch_size_float;
+            confidence_loss = tf.math.reduce_sum(confidence_loss) / batch_size_float;
+            class_loss = tf.math.reduce_sum(class_loss) / batch_size_float;
             loss += xy_loss + wh_loss + confidence_loss + class_loss;
 
         return loss;
