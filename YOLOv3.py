@@ -197,7 +197,7 @@ class YOLOv3Loss(tf.keras.Model):
         batch_size_float = tf.cast(batch_size, dtype = tf.float32);
         loss = 0;
         for l in range(self.num_layers):
-            # objectness: object_mask.shape = (batch,h,w,anchor_num)
+            # objectness: object_mask.shape = (batch,h,w,anchor_num,1)
             object_mask = labels[l][..., 4:5];
             object_mask_bool = tf.cast(object_mask, dtype = tf.bool);
             # 1) ignore masks
@@ -210,7 +210,7 @@ class YOLOv3Loss(tf.keras.Model):
             ignore_masks = list();
             for b in range(batch_size):
                 # absolute coordinate of true boxes in this layer and current batch
-                true_box = tf.boolean_mask(labels[l][b,...,0:4], object_mask_bool[b]);
+                true_box = tf.boolean_mask(labels[l][b,...,0:4], object_mask_bool[b,...,0]);
                 # iou.shape = (h,w,anchor_num,true_box_num)
                 iou = self.box_iou(pred_box[b], true_box);
                 # select a true box having the maximum iou for each anchor box: best_iou.shape = (h,w,anchor_num)
@@ -218,8 +218,9 @@ class YOLOv3Loss(tf.keras.Model):
                 # ignore anchor box with iou below given threshold
                 ignore_mask = tf.where(tf.less(best_iou,self.ignore_thresh),tf.ones_like(best_iou),tf.zeros_like(best_iou));
                 ignore_masks.append(ignore_mask);
-            # ignore_masks.shape = (batch, h, w, anchor_num)
             ignore_masks = tf.stack(ignore_masks);
+            # ignore_masks.shape = (batch, h, w, anchor_num, 1)
+            ignore_masks = tf.expand_dims(ignore_masks, -1);
             # 2) loss
             # anchor box ratios: anchors_tensor.shape = (anchor_num, 2)
             anchors_tensor = tf.constant(self.anchors[self.anchor_mask[l]], dtype = tf.float32);
