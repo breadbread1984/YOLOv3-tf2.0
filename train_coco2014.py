@@ -4,9 +4,9 @@ import numpy as np;
 import tensorflow as tf;
 import tensorflow_datasets as tfds;
 from YOLOv3 import YOLOv3, YOLOv3Loss;
-from Label import objects2labels;
+from preprocess import parse_function;
 
-batch_size = 32;
+batch_size = 32; # images of different sizes can't be stack into a batch
 
 def main():
 
@@ -18,9 +18,9 @@ def main():
     coco2014_builder = tfds.builder("coco2014");
     coco2014_builder.download_and_prepare();
     trainset = coco2014_builder.as_dataset(split = tfds.Split.TRAIN);
-    testset = coco2014_builder.as_dataset(split = tfds.Split.TEST);
-    trainset = trainset.repeat().shuffle(1024).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
-    testset = testset.repeat().shuffle(1024).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
+#    testset = coco2014_builder.as_dataset(split = tfds.Split.TEST);
+    trainset = trainset.map(parse_function).repeat().shuffle(1024).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
+#    testset = testset.map(parse_function).repeat().shuffle(1024).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
     # restore from existing checkpoint
     optimizer = tf.keras.optimizers.Adam(1e-3);
     if False == os.path.exists('checkpoints'): os.mkdir('checkpoints');
@@ -31,12 +31,10 @@ def main():
     # train model
     print("training...");
     avg_loss = tf.keras.metrics.Mean(name = 'loss', dtype = tf.float32);
-    for features in trainset:
-        images = features["image"];
-        labels = objects2labels(features["objects"]);
+    for images, labels in trainset:
         with tf.GradientTape() as tape:
             outputs = yolov3(images);
-            loss = yolov3_loss(outputs,labels);
+            loss = yolov3_loss(images,outputs,labels);
             avg_loss.update_state(loss);
         # write log
         if tf.equal(optimizer.iterations % 100, 0):
