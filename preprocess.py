@@ -58,6 +58,14 @@ def preprocess(image, objects, input_shape = (416,416), random = False, jitter =
         # return
         return image_data, bbox;
     else:
-        # randomly resize image
-        new_ar = 
+        # randomly sample aspect ratio to input shape
+        # resize image to the randomly sampled input shape
+        aspect_ratio_jitter = tf.random.uniform(shape = [2], minval = 1-jitter, maxval = 1+jitter, dtype = tf.float32);
+        resize_input_shape = tf.convert_to_tensor(input_shape, dtype = tf.float32) * aspect_ratio_jitter;
+        scale = tf.random.uniform(shape=[1], minval = .25, maxval = 2, dtype = tf.float32);
+        resize_shape = tf.cond(tf.greater(resize_input_shape[0],resize_input_shape[1]),true_fn = lambda: scale * resize_input_shape / aspect_ratio_jitter[0], false_fn = lambda: scale * resize_input_shape / aspect_ratio_jitter[1]);
+        resize_image = tf.image.resize(image, resize_shape, method = tf.image.ResizeMethod.mitchellcubic);
+        top_pad = int(np.random.rand() * (input_shape[0] - resize_shape[0]));
+        left_pad = int(np.random.rand() * (input_shape[1] - resize_shape[1]));
+        
     # TODO
