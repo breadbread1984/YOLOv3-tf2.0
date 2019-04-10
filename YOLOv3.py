@@ -162,7 +162,7 @@ class OutputParser(tf.keras.Model):
         # class confidence
         box_class_probs = tf.math.sigmoid(feats[..., 5:]);
         # return
-        # 1) prior box center coordinates
+        # 1) prior box upper left coordinates
         # 2) reshaped output feature
         # 3) box center proportional positions
         # 4) box proportional sizes
