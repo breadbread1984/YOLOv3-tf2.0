@@ -29,11 +29,16 @@ def parse_function(serialized_example):
         }),
     });
     image, label = preprocess(feature["image"], feature["objects"], random = True);
+    
     return image, label;
 
-def preprocess(image, objects, input_shape = (416,416), random = False, jitter = .3):
+def preprocess(image, objects, input_shape = (416,416), random = False, jitter = .3, hue = .1, sat = 1.5, bri = .1):
     
     assert 4 == len(image.shape) and 3 == image.shape[-1];
+    assert 0 < jitter < 1;
+    assert -1 < hue < 1;
+    assert 0 < sat;
+    assert 0 < bri < 1;
     bbox = objects["bbox"]; # bbox.shape = (batch, object_num,4), 4-tuple is (ymin,xmin,ymax,xmax)
     label = objects["label"]; # label.shape = (batch, object_num)
     is_crowd = objects["is_crowd"]; # is_crowd.shape = (batch, object_num)
@@ -104,6 +109,16 @@ def preprocess(image, objects, input_shape = (416,416), random = False, jitter =
             resize_image = tf.image.flip_left_right(resize_image);
             # correct boxes(y remains while x = 1 - x)
             bbox = tf.convert_to_tensor([0, 1, 0, 1], dtype = tf.float32) + tf.convert_to_tensor([1,-1,1,-1], dtype = tf.float32) * bbox;
-        # distort image
-        
-    # TODO
+        # distort image in HSV color space
+        image_data = tf.cast(resize_image, tf.float32) / 255.;
+        image_data = tf.image.random_hue(image_data, hue);
+        image_data = tf.image.random_saturation(image_data, lower = 1./sat, upper = sat);
+        image_data = tf.image.random_brightness(image_data, bri);
+        # discard invalid boxes (small box or box having negative width or height)
+        bbox_hw = bbox[...,2:4] - bbox[...,0:2] # bbox_hw.shape = (1,bbox_num,2)
+        bbox_hw = bbox_hw * tf.convert_to_tensor(input_shape, dtype = tf.float32);
+        valid = tf.math.logical_and(bbox_hw[...,0] > 1,bbox_hw[...,1] > 1); # valid.shape = (1,bbox_num)
+        valid_bbox = tf.boolean_mask(bbox, valid); # valid_bbox.shape = (valid box num, 4)
+        bbox = tf.expand_dims(valid_bbox, axis = 0); # bbox.shape = (1,valid box num, 4)
+        # return
+        return image_data, bbox;
