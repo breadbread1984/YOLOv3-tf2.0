@@ -41,6 +41,7 @@ def parse_function(serialized_example):
 
 def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3, hue = .1, sat = 1.5, bri = .1):
     
+    # NOTE: input_shape is given in (input height, input width) order
     assert 4 == len(image.shape) and 3 == image.shape[-1];
     assert 0 < jitter < 1;
     assert -1 < hue < 1;
@@ -129,6 +130,7 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
 
 def bbox_to_tensor(bbox, label, input_shape = (416,416), anchors = PRESET_ANCHORS, num_classes = 80):
     
+    # NOTE: input_shape is given in (input height, input width) order
     # bbox.shape = (1, box num, 4) which represents (ymin,xmin,ymax,xmax)
     # label.shape = (1, box num)
     # anchors = (9,2)

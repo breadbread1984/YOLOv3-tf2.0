@@ -130,6 +130,7 @@ class OutputParser(tf.keras.Model):
     
     def __init__(self, anchors, class_num, input_shape):
 
+        # NOTE: input_shape is given in (input height, input width) order
         # anchors: the sizes of all anchor boxes
         # class_num: the class num of objects
         # input_shape: the size of the input image
@@ -170,7 +171,9 @@ class OutputParser(tf.keras.Model):
 
 class YOLOv3Loss(tf.keras.Model):
     
-    def __init__(self, anchors, class_num, ignore_thresh = .5):
+    PRESET_ANCHORS = np.array([[10,13],[16,30],[33,23],[30,61],[62,45],[59,119],[116,90],[156,198],[373,326]], dtype = np.int32);
+    
+    def __init__(self, anchors = PRESET_ANCHORS, class_num = None, ignore_thresh = .5):
         
         super(YOLOv3Loss,self).__init__();
         self.num_layers = anchors.shape[0] // 3;
