@@ -14,13 +14,9 @@ def main():
     anchors = np.array([[10,13],[16,30],[33,23],[30,61],[62,45],[59,119],[116,90],[156,198],[373,326]], dtype = np.int32);
     yolov3 = YOLOv3(anchors.shape[0] // 3, 80);
     yolov3_loss = YOLOv3Loss(anchors, 80);
-    # load dataset
-    coco2014_builder = tfds.builder("coco2014");
-    coco2014_builder.download_and_prepare();
-    trainset = coco2014_builder.as_dataset(split = tfds.Split.TRAIN);
-#    testset = coco2014_builder.as_dataset(split = tfds.Split.TEST);
+    # load downloaded dataset
+    trainset = tfds.load(name = "coco2014", split = tfds.Split.TRAIN, download = False);
     trainset = trainset.map(parse_function).repeat().shuffle(1024).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
-#    testset = testset.map(parse_function).repeat().shuffle(1024).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
     # restore from existing checkpoint
     optimizer = tf.keras.optimizers.Adam(1e-3);
     if False == os.path.exists('checkpoints'): os.mkdir('checkpoints');
