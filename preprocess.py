@@ -171,12 +171,12 @@ def bbox_to_tensor(bbox, label, input_shape = (416,416), anchors = PRESET_ANCHOR
         for t, n in enumerate(best_anchor):
             for l in range(num_layers):
                 if n in anchor_mask[l]:
-                    i = int(valid_true_boxes[t,0] * y_true[l].shape[1]) # proportional x * grid_shape.width
-                    j = int(valid_true_boxes[t,1] * y_true[l].shape[0]) # proportional y * grid_shape.height
+                    i = int(valid_true_boxes[t,1] * y_true[l].shape[0]) # absolute center y = proportional y * grid_shape.height
+                    j = int(valid_true_boxes[t,0] * y_true[l].shape[1]) # absolute center x = proportional x * grid_shape.width
                     k = anchor_mask[l][n]; # best anchor box id
                     c = valid_label[t]; # class
-                    y_true[l][j,i,k,0:4] = valid_true_boxes[t,0:4]; # box proportional position (w,y,width,height)
-                    y_true[l][j,i,k,4] = 1; # object mask
-                    y_true[l][j,i,k,5+c] = 1; # class mask
+                    y_true[l][i,j,k,0:4] = valid_true_boxes[t,0:4]; # box proportional position (w,y,width,height)
+                    y_true[l][i,j,k,4] = 1; # object mask
+                    y_true[l][i,j,k,5 + c] = 1; # class mask
 
     return y_true;
