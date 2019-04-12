@@ -20,17 +20,20 @@ PRESET_ANCHORS = np.array([[10,13],[16,30],[33,23],[30,61],[62,45],[59,119],[116
 
 def parse_function(serialized_example):
     
-    feature = tfds.features.FeaturesDict({
-        # Images can have variable shape
-        "image": tfds.features.Image(encoding_format="jpeg"),
-        "image/filename": tfds.features.Text(),
-        "objects": tfds.features.SequenceDict({
-            "bbox": tfds.features.BBoxFeature(),
-            # Coco has 91 categories but only 80 are present in the dataset
-            "label": tfds.features.ClassLabel(num_classes=80),
-            "is_crowd": tf.bool,
-        }),
-    });
+    feature = tf.io.parse_single_example(
+        serialized_example,
+        features = tfds.features.FeaturesDict({
+            # Images can have variable shape
+            "image": tfds.features.Image(encoding_format="jpeg"),
+            "image/filename": tfds.features.Text(),
+            "objects": tfds.features.SequenceDict({
+                "bbox": tfds.features.BBoxFeature(),
+                # Coco has 91 categories but only 80 are present in the dataset
+                "label": tfds.features.ClassLabel(num_classes=80),
+                "is_crowd": tf.bool,
+            }),
+        })
+    );
     image, bbox = preprocess(feature["image"], feature["objects"]["bbox"], random = True);
     label = bbox_to_tensor(bbox, feature["objects"]["label"]);
     
