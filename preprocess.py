@@ -140,8 +140,8 @@ def bbox_to_tensor(bbox, label, input_shape = (416,416), anchors = PRESET_ANCHOR
     boxes_xy = true_boxes[..., 0:2] * input_shape_tensor; # box center absolute position
     boxes_wh = true_boxes[..., 2:4] * input_shape_tensor; # box absolute size
     
-    # create tensor for label
-    y_true = tuple((tf.zeros(shape = (input_shape[0] // {0:32, 1:16, 2:8}[l],input_shape[1] // {0:32, 1:16, 2:8}[l],anchor_mask[l], 5 + num_classes), dtype = tf.float32) for l in range(num_layers)));
+    # create tensor for label: y_true.shape[layer] = (height, width, anchor num, 5 + class num)
+    y_true = tuple((tf.zeros(shape = (input_shape[0] // {0:32, 1:16, 2:8}[l],input_shape[1] // {0:32, 1:16, 2:8}[l],len(anchor_mask[l]), 5 + num_classes), dtype = tf.float32) for l in range(num_layers)));
     
     # center the anchor boxes at the origin, get the max and min of corners' (x,y)
     anchors = tf.expand_dims(tf.convert_to_tensor(anchors, dtype = tf.float32), 0); # anchors.shape = (1, 9, 2)
