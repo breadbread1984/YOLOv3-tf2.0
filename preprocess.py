@@ -56,7 +56,7 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
         top_pad = (input_shape[0] - resize_shape[0]) // 2;
         bottom_pad = input_shape[0] - resize_shape[0] - top_pad;
         left_pad = (input_shape[1] - resize_shape[1]) // 2;
-        right_pad = input_shape[1] - resize_shape[1] - bottom_pad;
+        right_pad = input_shape[1] - resize_shape[1] - left_pad;
         resize_image = tf.pad(resize_image,[[0,0],[top_pad,bottom_pad],[left_pad,right_pad],[0,0]], constant_values = 128);
         # cast to float32
         image_data = tf.cast(resize_image, tf.float32) / 255.;
