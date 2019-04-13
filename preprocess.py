@@ -18,22 +18,8 @@ import tensorflow_datasets as tfds;
 # anchor boxes are given in (width, height) order
 PRESET_ANCHORS = np.array([[10,13],[16,30],[33,23],[30,61],[62,45],[59,119],[116,90],[156,198],[373,326]], dtype = np.int32);
 
-def parse_function(serialized_example):
+def parse_function(feature):
     
-    feature = tf.io.parse_single_example(
-        serialized_example,
-        features = tfds.features.FeaturesDict({
-            # Images can have variable shape
-            "image": tfds.features.Image(encoding_format="jpeg"),
-            "image/filename": tfds.features.Text(),
-            "objects": tfds.features.SequenceDict({
-                "bbox": tfds.features.BBoxFeature(),
-                # Coco has 91 categories but only 80 are present in the dataset
-                "label": tfds.features.ClassLabel(num_classes=80),
-                "is_crowd": tf.bool,
-            }),
-        })
-    );
     image, bbox = preprocess(feature["image"], feature["objects"]["bbox"], random = True);
     label = bbox_to_tensor(bbox, feature["objects"]["label"]);
     
@@ -42,11 +28,13 @@ def parse_function(serialized_example):
 def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3, hue = .1, sat = 1.5, bri = .1):
     
     # NOTE: input_shape is given in (input height, input width) order
-    assert 4 == len(image.shape) and 3 == image.shape[-1];
+    assert 3 == len(image.shape) and 3 == image.shape[-1];
     assert 0 < jitter < 1;
     assert -1 < hue < 1;
     assert 0 < sat;
     assert 0 < bri < 1;
+    # add batch dimension
+    image = tf.expand_dims(image, axis = 0);
     img_shape = image.shape[1:3]; #(height, width)
     
     if False == random:
