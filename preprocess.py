@@ -40,7 +40,7 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
     if False == random:
         # scale the input image to make the wider edge fit the input shape
         # NOTE: I don't use resize_with_pad because it can only stuff zeros, but I want 128
-        resize_image = tf.image.resize(image, input_shape, method = tf.image.ResizeMethod.mitchellcubic, preserve_aspect_ratio = True);
+        resize_image = tf.image.resize(image, input_shape, method = tf.image.ResizeMethod.BICUBIC, preserve_aspect_ratio = True);
         resize_shape = resize_image.shape[1:3]; #(height, width)
         top_pad = (input_shape[0] - resize_shape[0]) // 2;
         bottom_pad = input_shape[0] - resize_shape[0] - top_pad;
@@ -62,7 +62,7 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
         resize_input_shape = tf.convert_to_tensor(input_shape, dtype = tf.float32) * aspect_ratio_jitter;
         scale = tf.random.uniform(shape=[1], minval = .25, maxval = 2, dtype = tf.float32);
         resize_shape = tf.cond(tf.greater(resize_input_shape[0],resize_input_shape[1]),true_fn = lambda: scale * resize_input_shape / aspect_ratio_jitter[0], false_fn = lambda: scale * resize_input_shape / aspect_ratio_jitter[1]);
-        resize_image = tf.image.resize(image, resize_shape, method = tf.image.ResizeMethod.mitchellcubic);
+        resize_image = tf.image.resize(image, resize_shape, method = tf.image.ResizeMethod.BICUBIC);
         if input_shape[0] > resize_shape[0]:
             pad = input_shape[0] - resize_shape[0];
             resize_image = tf.pad(resize_image,[[0,0],[pad,pad],[0,0],[0,0]], constant_values = 128);
