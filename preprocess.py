@@ -62,6 +62,7 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
         resize_input_shape = tf.convert_to_tensor(input_shape, dtype = tf.float32) * aspect_ratio_jitter;
         scale = tf.random.uniform(shape=[1], minval = .25, maxval = 2, dtype = tf.float32);
         resize_shape = tf.cond(tf.greater(resize_input_shape[0],resize_input_shape[1]),true_fn = lambda: scale * resize_input_shape / aspect_ratio_jitter[0], false_fn = lambda: scale * resize_input_shape / aspect_ratio_jitter[1]);
+        resize_shape = tf.cast(resize_shape, dtype = tf.int32);
         resize_image = tf.image.resize(image, resize_shape, method = tf.image.ResizeMethod.BICUBIC);
         if input_shape[0] > resize_shape[0]:
             pad = input_shape[0] - resize_shape[0];
@@ -71,7 +72,7 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
             # correct boxes
             bbox = bbox * tf.convert_to_tensor([resize_shape[0], resize_shape[1], resize_shape[0], resize_shape[1]], dtype = tf.float32);
             bbox = bbox + tf.convert_to_tensor([pad, 0, pad, 0], dtype = tf.float32);
-            resize_shape = resize_shape + tf.convert_to_tensor([2 * pad,0], dtype = tf.float32);
+            resize_shape = resize_shape + tf.convert_to_tensor([2 * pad,0], dtype = tf.int32);
             bbox = bbox / tf.convert_to_tensor([resize_shape[0], resize_shape[1], resize_shape[0], resize_shape[1]], dtype = tf.float32);
         else:
             crop = resize_shape[0] - input_shape[0];
@@ -85,7 +86,7 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
             # correct boxes
             bbox = bbox * tf.convert_to_tensor([resize_shape[0], resize_shape[1], resize_shape[0], resize_shape[1]], dtype = tf.float32);
             bbox = bbox + tf.convert_to_tensor([0, pad, 0, pad], dtype = tf.float32);
-            resize_shape = resize_shape + tf.convert_to_tensor([0, 2 * pad], dtype = tf.float32);
+            resize_shape = resize_shape + tf.convert_to_tensor([0, 2 * pad], dtype = tf.int32);
             bbox = bbox / tf.convert_to_tensor([resize_shape[0], resize_shape[1], resize_shape[0], resize_shape[1]], dtype = tf.float32);
         else:
             crop = resize_shape[1] - input_shape[1];
