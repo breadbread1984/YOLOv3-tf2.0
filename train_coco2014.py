@@ -1,10 +1,11 @@
 #!/usr/bin/python3
 
+import os;
 import numpy as np;
 import tensorflow as tf;
 import tensorflow_datasets as tfds;
 from YOLOv3 import YOLOv3, YOLOv3Loss;
-from preprocess import parse_function;
+from preprocess import map_function;
 
 batch_size = 32; # images of different sizes can't be stack into a batch
 
@@ -16,11 +17,11 @@ def main():
     yolov3_loss = YOLOv3Loss(anchors, 80);
     # load downloaded dataset
     trainset = tfds.load(name = "coco2014", split = tfds.Split.TRAIN, download = False);
-    trainset = trainset.map(parse_function).repeat().shuffle(1024).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
+    trainset = trainset.map(map_function).repeat().shuffle(1024).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
     # restore from existing checkpoint
     optimizer = tf.keras.optimizers.Adam(1e-3);
     if False == os.path.exists('checkpoints'): os.mkdir('checkpoints');
-    checkpoint = tf.train.Checkpoint(model = model, optimizer = optimizer, optimizer_step = optimizer.iterations);
+    checkpoint = tf.train.Checkpoint(model = yolov3, optimizer = optimizer, optimizer_step = optimizer.iterations);
     checkpoint.restore(tf.train.latest_checkpoint('checkpoints'));
     # tensorboard summary
     log = tf.summary.create_file_writer('checkpoints');

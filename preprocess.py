@@ -18,10 +18,14 @@ import tensorflow_datasets as tfds;
 # anchor boxes are given in (width, height) order
 PRESET_ANCHORS = np.array([[10,13],[16,30],[33,23],[30,61],[62,45],[59,119],[116,90],[156,198],[373,326]], dtype = np.int32);
 
-def parse_function(feature):
+def map_function(feature):
+
+    return tf.py_function(map_function_impl,inp = [feature["image"], feature["objects"]["bbox"], feature["objects"]["label"]],Tout = tf.float32);
+
+def map_function_impl(image, bbox, label):
     
-    image, bbox = preprocess(feature["image"], feature["objects"]["bbox"], random = True);
-    label = bbox_to_tensor(bbox, feature["objects"]["label"]);
+    image, bbox = preprocess(image, bbox, random = True);
+    label = bbox_to_tensor(bbox, label);
     
     return image, label;
 
