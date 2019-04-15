@@ -72,7 +72,7 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
             pad = input_shape[0] - resize_shape[0];
             resize_image = tf.pad(resize_image,[[0,0],[pad,pad],[0,0],[0,0]], constant_values = 128);
             # sample crop offset_height
-            offset_height = int(np.random.rand() * pad);
+            offset_height = tf.random.uniform(maxval = pad, dtype = tf.int32, shape = ());
             # correct boxes
             bbox = bbox * tf.convert_to_tensor([resize_shape[0], resize_shape[1], resize_shape[0], resize_shape[1]], dtype = tf.float32);
             bbox = bbox + tf.convert_to_tensor([pad, 0, pad, 0], dtype = tf.float32);
@@ -81,12 +81,12 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
         else:
             crop = resize_shape[0] - input_shape[0];
             # sample crop offset_height
-            offset_height = int(np.random.rand() * crop);
+            offset_height = tf.random.uniform(maxval = crop, dtype = tf.int32, shape = ());
         if input_shape[1] > resize_shape[1]:
             pad = input_shape[1] - resize_shape[1];
             resize_image = tf.pad(resize_image,[[0,0],[0,0],[pad,pad],[0,0]], constant_values = 128);
             # sample crop offset_width
-            offset_width = int(np.random.rand() * pad);
+            offset_width = tf.random.uniform(maxval = pad, dtype = tf.int32, shape = ());
             # correct boxes
             bbox = bbox * tf.convert_to_tensor([resize_shape[0], resize_shape[1], resize_shape[0], resize_shape[1]], dtype = tf.float32);
             bbox = bbox + tf.convert_to_tensor([0, pad, 0, pad], dtype = tf.float32);
@@ -95,7 +95,7 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
         else:
             crop = resize_shape[1] - input_shape[1];
             # sample crop offset_width
-            offset_width = int(np.random.rand() * crop);
+            offset_width = tf.random.uniform(maxval = crop, dtype = tf.int32, shape = ());
         # crop
         resize_image = tf.image.crop_to_bounding_box(resize_image, offset_height, offset_width, input_shape[0], input_shape[1]);
         # correct boxes
@@ -131,9 +131,9 @@ def bbox_to_tensor(bbox, label, input_shape = (416,416), anchors = PRESET_ANCHOR
     num_layers = len(anchors) // 3;
     anchor_mask = [[6,7,8],[3,4,5],[0,1,2]] if num_layers == 3 else [[3,4,5],[1,2,3]];
     
-    true_boxes = tf.zeros_like(bbox);
-    true_boxes[..., 0:2] = tf.reverse(bbox[...,0:2] + bbox[...,2:4] // 2, axis = [-1]); # box center proportional position
-    true_boxes[..., 2:4] = tf.reverse(bbox[...,2:4] - bbox[...,0:2], axis = [-1]); # box proportional size
+    true_boxes_xy = tf.reverse(bbox[...,0:2] + bbox[...,2:4] // 2, axis = [-1]); # box center proportional position
+    true_boxes_wh = tf.reverse(bbox[...,2:4] - bbox[...,0:2], axis = [-1]); # box proportional size
+    true_boxes = tf.concat([true_boxes_xy, true_boxes_wh], axis = -1);
     input_shape_tensor = tf.reverse(tf.convert_to_tensor(input_shape, dtype = tf.float32), axis = [0]);
     boxes_xy = true_boxes[..., 0:2] * input_shape_tensor; # box center absolute position
     boxes_wh = true_boxes[..., 2:4] * input_shape_tensor; # box absolute size
@@ -144,7 +144,7 @@ def bbox_to_tensor(bbox, label, input_shape = (416,416), anchors = PRESET_ANCHOR
     # center the anchor boxes at the origin, get the max and min of corners' (x,y)
     anchors = tf.expand_dims(tf.convert_to_tensor(anchors, dtype = tf.float32), 0); # anchors.shape = (1, 9, 2)
     anchor_maxes = anchors / 2.; # max of width, height, anchors_maxes.shape = (1, 9, 2)
-    anchor_mins = -anchors_maxes; # min of width, height, anchors_mins.shape = (1, 9, 2)
+    anchor_mins = -anchor_maxes; # min of width, height, anchors_mins.shape = (1, 9, 2)
 
     # center the bbox at the origin, get the max and min of corners' (x,y)
     valid_mask = boxes_wh[...,0] > 0; # valid box should have width > 0: valid_mask.shape = (1, box_num)
