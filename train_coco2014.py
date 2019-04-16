@@ -17,7 +17,7 @@ def main():
     yolov3_loss = YOLOv3Loss(anchors, 80);
     # load downloaded dataset
     trainset = tfds.load(name = "coco2014", split = tfds.Split.TRAIN, download = False);
-    trainset = trainset.map(map_function).repeat().shuffle(1024).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
+    trainset = trainset.map(map_function).repeat().shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
     # restore from existing checkpoint
     optimizer = tf.keras.optimizers.Adam(1e-3);
     if False == os.path.exists('checkpoints'): os.mkdir('checkpoints');
