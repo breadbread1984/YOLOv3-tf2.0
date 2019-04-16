@@ -72,7 +72,7 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
             pad = input_shape[0] - resize_shape[0];
             resize_image = tf.pad(resize_image,[[0,0],[pad,pad],[0,0],[0,0]], constant_values = 128);
             # sample crop offset_height
-            offset_height = tf.random.uniform(maxval = pad, dtype = tf.int32, shape = ());
+            offset_height = tf.random.uniform(maxval = pad + 1, dtype = tf.int32, shape = ());
             # correct boxes
             bbox = bbox * tf.convert_to_tensor([resize_shape[0], resize_shape[1], resize_shape[0], resize_shape[1]], dtype = tf.float32);
             bbox = bbox + tf.convert_to_tensor([pad, 0, pad, 0], dtype = tf.float32);
@@ -81,12 +81,12 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
         else:
             crop = resize_shape[0] - input_shape[0];
             # sample crop offset_height
-            offset_height = tf.random.uniform(maxval = crop, dtype = tf.int32, shape = ());
+            offset_height = tf.random.uniform(maxval = crop + 1, dtype = tf.int32, shape = ());
         if input_shape[1] > resize_shape[1]:
             pad = input_shape[1] - resize_shape[1];
             resize_image = tf.pad(resize_image,[[0,0],[0,0],[pad,pad],[0,0]], constant_values = 128);
             # sample crop offset_width
-            offset_width = tf.random.uniform(maxval = pad, dtype = tf.int32, shape = ());
+            offset_width = tf.random.uniform(maxval = pad + 1, dtype = tf.int32, shape = ());
             # correct boxes
             bbox = bbox * tf.convert_to_tensor([resize_shape[0], resize_shape[1], resize_shape[0], resize_shape[1]], dtype = tf.float32);
             bbox = bbox + tf.convert_to_tensor([0, pad, 0, pad], dtype = tf.float32);
@@ -95,7 +95,7 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
         else:
             crop = resize_shape[1] - input_shape[1];
             # sample crop offset_width
-            offset_width = tf.random.uniform(maxval = crop, dtype = tf.int32, shape = ());
+            offset_width = tf.random.uniform(maxval = crop + 1, dtype = tf.int32, shape = ());
         # crop
         resize_image = tf.image.crop_to_bounding_box(resize_image, offset_height, offset_width, input_shape[0], input_shape[1]);
         # correct boxes
