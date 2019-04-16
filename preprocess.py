@@ -20,14 +20,16 @@ PRESET_ANCHORS = np.array([[10,13],[16,30],[33,23],[30,61],[62,45],[59,119],[116
 
 def map_function(feature):
 
-    return tf.py_function(map_function_impl,inp = [feature["image"], feature["objects"]["bbox"], feature["objects"]["label"]],Tout = tf.float32);
+    image,label1,label2,label3 = tf.py_function(map_function_impl,inp = [feature["image"], feature["objects"]["bbox"], feature["objects"]["label"]],Tout = [tf.float32,tf.float32,tf.float32,tf.float32]);
+    
+    return image, label1,label2,label3;
 
 def map_function_impl(image, bbox, label):
 
     image, bbox = preprocess(image, bbox, random = True);
-    label = bbox_to_tensor(bbox, label);
+    label1,label2,label3 = bbox_to_tensor(bbox, label);
 
-    return image, label;
+    return image, label1, label2, label3;
 
 def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3, hue = .1, sat = 1.5, bri = .1):
 
@@ -119,7 +121,7 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
         valid_bbox = tf.boolean_mask(bbox, valid); # valid_bbox.shape = (valid box num, 4)
         assert(valid_bbox.shape[1] != 0);
         # return
-        return image_data, bbox;
+        return tf.squeeze(image_data), bbox;
 
 def bbox_to_tensor(bbox, label, input_shape = (416,416), anchors = PRESET_ANCHORS, num_classes = 80):
 

@@ -28,10 +28,10 @@ def main():
     # train model
     print("training...");
     avg_loss = tf.keras.metrics.Mean(name = 'loss', dtype = tf.float32);
-    for images, labels in trainset:
+    for images, labels1, labels2, labels3 in trainset:
         with tf.GradientTape() as tape:
             outputs = yolov3(images);
-            loss = yolov3_loss(images,outputs,labels);
+            loss = yolov3_loss(images,outputs,(labels1, labels2, labels3));
             avg_loss.update_state(loss);
         # write log
         if tf.equal(optimizer.iterations % 100, 0):
