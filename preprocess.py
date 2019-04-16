@@ -23,14 +23,14 @@ def map_function(feature):
     return tf.py_function(map_function_impl,inp = [feature["image"], feature["objects"]["bbox"], feature["objects"]["label"]],Tout = tf.float32);
 
 def map_function_impl(image, bbox, label):
-    
+
     image, bbox = preprocess(image, bbox, random = True);
     label = bbox_to_tensor(bbox, label);
-    
+
     return image, label;
 
 def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3, hue = .1, sat = 1.5, bri = .1):
-    
+
     # NOTE: input_shape is given in (input height, input width) order
     assert 3 == len(image.shape) and 3 == image.shape[-1];
     assert 0 < jitter < 1;
@@ -40,7 +40,7 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
     # add batch dimension
     image = tf.expand_dims(image, axis = 0);
     img_shape = image.shape[1:3]; #(height, width)
-    
+
     if False == random:
         # scale the input image to make the wider edge fit the input shape
         # NOTE: I don't use resize_with_pad because it can only stuff zeros, but I want 128
@@ -113,24 +113,24 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
         image_data = tf.image.random_saturation(image_data, lower = 1./sat, upper = sat);
         image_data = tf.image.random_brightness(image_data, bri);
         # discard invalid boxes (small box or box having negative width or height)
-        bbox_hw = bbox[...,2:4] - bbox[...,0:2] # bbox_hw.shape = (1,bbox_num,2)
+        bbox_hw = bbox[...,2:4] - bbox[...,0:2] # bbox_hw.shape = (bbox_num,2)
         bbox_hw = bbox_hw * tf.convert_to_tensor(input_shape, dtype = tf.float32);
-        valid = tf.math.logical_and(bbox_hw[...,0] > 1,bbox_hw[...,1] > 1); # valid.shape = (1,bbox_num)
+        valid = tf.math.logical_and(bbox_hw[...,0] > 1,bbox_hw[...,1] > 1); # valid.shape = (bbox_num)
         valid_bbox = tf.boolean_mask(bbox, valid); # valid_bbox.shape = (valid box num, 4)
-        bbox = tf.expand_dims(valid_bbox, axis = 0); # bbox.shape = (1,valid box num, 4)
+        assert(valid_bbox.shape[1] != 0);
         # return
         return image_data, bbox;
 
 def bbox_to_tensor(bbox, label, input_shape = (416,416), anchors = PRESET_ANCHORS, num_classes = 80):
-    
+
     # NOTE: input_shape is given in (input height, input width) order
-    # bbox.shape = (1, box num, 4) which represents (ymin,xmin,ymax,xmax)
-    # label.shape = (1, box num)
+    # bbox.shape = (box num, 4) which represents (ymin,xmin,ymax,xmax)
+    # label.shape = (box num)
     # anchors = (9,2)
     assert tf.math.reduce_sum(tf.cast(label >= num_classes, dtype = tf.int32)).numpy() == 0;
     num_layers = len(anchors) // 3;
     anchor_mask = [[6,7,8],[3,4,5],[0,1,2]] if num_layers == 3 else [[3,4,5],[1,2,3]];
-    
+
     true_boxes_xy = tf.reverse(bbox[...,0:2] + bbox[...,2:4] // 2, axis = [-1]); # box center proportional position
     true_boxes_wh = tf.reverse(bbox[...,2:4] - bbox[...,0:2], axis = [-1]); # box proportional size
     true_boxes = tf.concat([true_boxes_xy, true_boxes_wh], axis = -1);
@@ -147,7 +147,7 @@ def bbox_to_tensor(bbox, label, input_shape = (416,416), anchors = PRESET_ANCHOR
     anchor_mins = -anchor_maxes; # min of width, height, anchors_mins.shape = (1, 9, 2)
 
     # center the bbox at the origin, get the max and min of corners' (x,y)
-    valid_mask = boxes_wh[...,0] > 0; # valid box should have width > 0: valid_mask.shape = (1, box_num)
+    valid_mask = boxes_wh[...,0] > 0; # valid box should have width > 0: valid_mask.shape = (box_num)
     wh = tf.boolean_mask(boxes_wh, valid_mask); # absolute size: wh.shape = (valid box num, 2)
     valid_true_boxes = tf.boolean_mask(true_boxes, valid_mask); # box proportional position: valid_true_boxes.shape = (valid box num, 4)
     valid_label = tf.boolean_mask(label, valid_mask); # valid_label.shape = (valid box num)
