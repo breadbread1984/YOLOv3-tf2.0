@@ -43,7 +43,7 @@ class ResBlock(tf.keras.Model):
         for triple in self.triples:
             results_conv = triple[0](results);
             results_conv = triple[1](results_conv);
-            results = triple[2](results_conv,results);
+            results = triple[2]([results_conv,results]);
         return results;
 
 class Body(tf.keras.Model):
