@@ -7,7 +7,7 @@ import tensorflow_datasets as tfds;
 from YOLOv3 import YOLOv3, YOLOv3Loss;
 from preprocess import map_function;
 
-batch_size = 16; # images of different sizes can't be stack into a batch
+batch_size = 8; # images of different sizes can't be stack into a batch
 
 def main():
 
