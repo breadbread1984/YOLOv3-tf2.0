@@ -3,128 +3,75 @@
 import numpy as np;
 import tensorflow as tf;
 
-class ConvBlock(tf.keras.Model):
-    
-    def __init__(self, filters, kernel_size, strides = (1,1), padding = None):
-        
-        super(ConvBlock, self).__init__();
-        padding = 'valid' if strides == (2,2) else 'same';
-        self.conv = tf.keras.layers.Conv2D(filters, kernel_size = kernel_size, padding = padding, kernel_regularizer = tf.keras.regularizers.l2(l = 5e-4));
-        self.bn = tf.keras.layers.BatchNormalization();
-        self.relu = tf.keras.layers.LeakyReLU(alpha = 0.1);
-        
-    def call(self, inputs):
-        
-        results = self.conv(inputs);
-        results = self.bn(results);
-        results = self.relu(results);
-        return results;
+# NOTE: using functional API can save a lot of gmem
 
-class ResBlock(tf.keras.Model):
-    
-    def __init__(self, filters, blocks):
-        
-        super(ResBlock, self).__init__();
-        self.pad = tf.keras.layers.ZeroPadding2D(padding = ((1,0),(1,0)));
-        self.convblock = ConvBlock(filters = filters, kernel_size = (3,3), strides = (2,2));
-        self.triples = list();
-        for i in range(blocks):
-            self.triples.append((
-                ConvBlock(filters = filters // 2, kernel_size = (1,1)),
-                ConvBlock(filters = filters, kernel_size = (3,3)),
-                tf.keras.layers.Add()
-            ));
-    
-    def call(self, inputs):
-        
-        # resblock downscale the image size to half
-        results = self.pad(inputs);
-        results = self.convblock(results);
-        for triple in self.triples:
-            results_conv = triple[0](results);
-            results_conv = triple[1](results_conv);
-            results = triple[2]([results_conv,results]);
-        return results;
+def ConvBlock(input_shape, filters, kernel_size, strides = (1,1), padding = None):
+    # 3 layers in total
 
-class Body(tf.keras.Model):
+    padding = 'valid' if strides == (2,2) else 'same';
     
-    def __init__(self):
-        
-        super(Body, self).__init__();
-        self.cb1 = ConvBlock(filters = 32, kernel_size = (3,3));
-        self.rb1 = ResBlock(filters = 64, blocks = 1);
-        self.rb2 = ResBlock(filters = 128, blocks = 2);
-        self.rb3 = ResBlock(filters = 256, blocks = 8);
-        self.rb4 = ResBlock(filters = 512, blocks = 8);
-        self.rb5 = ResBlock(filters = 1024, blocks = 4);
-    
-    def call(self, inputs):
-        
-        # body downscale the image size to 1/32
-        results = self.cb1(inputs);
-        results = self.rb1(results);
-        results = self.rb2(results);
-        results = self.rb3(results);
-        results = self.rb4(results);
-        results = self.rb5(results);
-        return results;
+    inputs = tf.keras.Input(shape = input_shape);
+    conv = tf.keras.layers.Conv2D(filters, kernel_size = kernel_size, strides = strides, padding = padding, kernel_regularizer = tf.keras.regularizers.l2(l = 5e-4))(inputs);
+    bn = tf.keras.layers.BatchNormalization()(conv);
+    relu = tf.keras.layers.LeakyReLU(alpha = 0.1)(bn);
+    return tf.keras.Model(inputs = inputs, outputs = relu);
 
-class Output(tf.keras.Model):
+def ResBlock(input_shape, filters, blocks):
+    # 4 + 7 * blocks layers in total
     
-    def __init__(self,input_filters, output_filters):
-        
-        super(Output, self).__init__();
-        self.cb1 = ConvBlock(filters = input_filters, kernel_size = (1,1));
-        self.cb2 = ConvBlock(filters = input_filters * 2, kernel_size = (3,3));
-        self.cb3 = ConvBlock(filters = input_filters, kernel_size = (1,1));
-        self.cb4 = ConvBlock(filters = input_filters * 2, kernel_size = (3,3));
-        self.cb5 = ConvBlock(filters = input_filters, kernel_size = (1,1));
-        self.cb6 = ConvBlock(filters = input_filters * 2, kernel_size = (3,3));
-        self.cb7 = ConvBlock(filters = output_filters, kernel_size = (1,1));
-    
-    def call(self, inputs):
-        
-        results = self.cb1(inputs);
-        results = self.cb2(results);
-        results = self.cb3(results);
-        results = self.cb4(results);
-        results = self.cb5(results);
-        outputs = self.cb6(results);
-        outputs = self.cb7(outputs);
-        return results, outputs;
+    inputs = tf.keras.Input(shape = input_shape);
+    pad = tf.keras.layers.ZeroPadding2D(padding = ((1,0),(1,0)))(inputs);
+    results = ConvBlock(pad.shape[1:], filters = filters, kernel_size = (3,3), strides = (2,2))(pad);
+    for i in range(blocks):
+        results_conv = ConvBlock(results.shape[1:], filters = filters // 2, kernel_size = (1,1))(results);
+        results_conv = ConvBlock(results_conv.shape[1:], filters = filters, kernel_size = (3,3))(results_conv);
+        results = tf.keras.layers.Add()([results_conv, results]);
+    return tf.keras.Model(inputs = inputs, outputs = results);
 
-class YOLOv3(tf.keras.Model):
+def Body(input_shape):
+    # 3 + (4 + 7 * 1) + (4 + 7 * 2) + (4 + 7 * 8) + (4 + 7 * 8) + (4 + 7 * 4) = 184 layers in total
     
-    def __init__(self, anchor_num, class_num):
-        
-        super(YOLOv3,self).__init__();
-        self.body = Body();
-        self.output1 = Output(512, anchor_num * (class_num + 5));
-        self.cb1 = ConvBlock(filters = 256, kernel_size = (1,1));
-        self.us1 = tf.keras.layers.UpSampling2D(2);
-        self.cat1 = tf.keras.layers.Concatenate();
-        self.output2 = Output(256, anchor_num * (class_num + 5));
-        self.cb2 = ConvBlock(filters = 128, kernel_size = (1,1));
-        self.us2 = tf.keras.layers.UpSampling2D(2);
-        self.cat2 = tf.keras.layers.Concatenate();
-        self.output3 = Output(128, anchor_num * (class_num + 5));
-        
-    def call(self, inputs):
-        
-        results = self.body(inputs);
-        # small scale
-        x,y1 = self.output1(results);
-        # middle scale
-        x = self.cb1(x);
-        x = self.us1(x);
-        x = self.cat1([x,self.body.layers[152].output]);
-        x,y2 = self.output2(x);
-        # large scale
-        x = self.cb2(x);
-        x = self.us2(x);
-        x = self.cat2([x,self.body.layers[92].output]);
-        x,y3 = self.output3(x);
-        return y1,y2,y3;
+    inputs = tf.keras.Input(shape = input_shape);
+    cb = ConvBlock(inputs.shape[1:], filters = 32, kernel_size = (3,3))(inputs); # (batch, 416, 416, 32)
+    rb1 = ResBlock(cb.shape[1:], filters = 64, blocks = 1)(cb); # (batch, 208, 208, 64)
+    rb2 = ResBlock(rb1.shape[1:], filters = 128, blocks = 2)(rb1); # (batch, 104, 104, 128)
+    rb3 = ResBlock(rb2.shape[1:], filters = 256, blocks = 8)(rb2); # (batch, 52, 52, 256)
+    rb4 = ResBlock(rb3.shape[1:], filters = 512, blocks = 8)(rb3); # (batch, 26, 26, 512)
+    rb5 = ResBlock(rb4.shape[1:], filters = 1024, blocks = 4)(rb4); # (batch, 13, 13, 1024)
+    return tf.keras.Model(inputs = inputs, outputs = (rb5, rb4 ,rb3));
+
+def Output(input_shape, input_filters, output_filters):
+    # 3 * 7 = 21 layer in total
+    
+    inputs = tf.keras.Input(shape = input_shape);
+    cb1 = ConvBlock(inputs.shape[1:], filters = input_filters, kernel_size = (1,1))(inputs);
+    cb2 = ConvBlock(cb1.shape[1:], filters = input_filters * 2, kernel_size = (3,3))(cb1);
+    cb3 = ConvBlock(cb2.shape[1:], filters = input_filters, kernel_size = (1,1))(cb2);
+    cb4 = ConvBlock(cb3.shape[1:], filters = input_filters * 2, kernel_size = (3,3))(cb3);
+    cb5 = ConvBlock(cb4.shape[1:], filters = input_filters, kernel_size = (1,1))(cb4);
+    cb6 = ConvBlock(cb5.shape[1:], filters = input_filters * 2, kernel_size = (3,3))(cb5);
+    cb7 = ConvBlock(cb6.shape[1:], filters = output_filters, kernel_size = (1,1))(cb6);
+    return tf.keras.Model(inputs = inputs, outputs = (cb5,cb7));
+
+def YOLOv3(input_shape, anchor_num, class_num):
+    
+    inputs = tf.keras.Input(shape = input_shape);
+    body = Body(inputs.shape[1:]);
+    large,middle,small = body(inputs);
+    assert len(body.layers) == 7;
+    # feature for detecting large scale objects
+    x1,y1 = Output(large.shape[1:], 512, anchor_num * (class_num + 5))(large);
+    # feature for detecting middle scale objects
+    cb1 = ConvBlock(x1.shape[1:], filters = 256, kernel_size = (1,1))(x1);
+    us1 = tf.keras.layers.UpSampling2D(2)(cb1);
+    cat1 = tf.keras.layers.Concatenate()([us1, middle]);
+    x2,y2 = Output(cat1.shape[1:], 256, anchor_num * (class_num + 5))(cat1);
+    # feature for detecting small scale objects
+    cb2 = ConvBlock(x2.shape[1:], filters = 128, kernel_size = (1,1))(x2);
+    us2 = tf.keras.layers.UpSampling2D(2)(cb2);
+    cat2 = tf.keras.layers.Concatenate()([us2, small]);
+    x3,y3 = Output(cat2.shape[1:], 128, anchor_num * (class_num + 5))(cat2);
+    return tf.keras.Model(inputs = inputs, outputs = (y1,y2,y3));
 
 class OutputParser(tf.keras.Model):
     
