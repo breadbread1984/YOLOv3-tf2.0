@@ -5,21 +5,21 @@ import numpy as np;
 import tensorflow as tf;
 import tensorflow_datasets as tfds;
 from YOLOv3 import YOLOv3, YOLOv3Loss;
-from preprocess import map_function;
+from preprocess import map_function_impl;
 
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1';
 #os.environ['CUDA_VISIBLE_DEVICES'] = '';
-batch_size = 32; # images of different sizes can't be stack into a batch
+batch_size = 16; # images of different sizes can't be stack into a batch
 
 def main():
 
     # yolov3 model
     anchors = np.array([[10,13],[16,30],[33,23],[30,61],[62,45],[59,119],[116,90],[156,198],[373,326]], dtype = np.int32);
-    yolov3 = YOLOv3(anchors.shape[0] // 3, 80);
+    yolov3 = YOLOv3((416,416,3), anchors.shape[0] // 3, 80);
     yolov3_loss = YOLOv3Loss(anchors, 80);
     # load downloaded dataset
     trainset = tfds.load(name = "coco2014", split = tfds.Split.TRAIN, download = False);
-    trainset = trainset.map(map_function).repeat().shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
+    trainset = trainset.repeat().batch(1).prefetch(tf.data.experimental.AUTOTUNE);
     # restore from existing checkpoint
     optimizer = tf.keras.optimizers.Adam(1e-3);
     if False == os.path.exists('checkpoints'): os.mkdir('checkpoints');
@@ -30,7 +30,24 @@ def main():
     # train model
     print("training...");
     avg_loss = tf.keras.metrics.Mean(name = 'loss', dtype = tf.float32);
-    for images, labels1, labels2, labels3 in trainset:
+    while True:
+        images = list();
+        labels1 = list();
+        labels2 = list();
+        labels3 = list();
+        count = 0;
+        for feature in trainset:
+            image, label1, label2, label3 = map_function_impl(tf.squeeze(feature["image"],[0]), tf.squeeze(feature["objects"]["bbox"],[0]), tf.squeeze(feature["objects"]["label"],[0]));
+            images.append(image);
+            labels1.append(label1);
+            labels2.append(label2);
+            labels3.append(label3);
+            count = count + 1;
+            if count == batch_size: break;
+        images = tf.stack(images);
+        labels1 = tf.stack(labels1);
+        labels2 = tf.stack(labels2);
+        labels3 = tf.stack(labels3);
         with tf.GradientTape() as tape:
             outputs = yolov3(images);
             loss = yolov3_loss(images,outputs,(labels1, labels2, labels3));
