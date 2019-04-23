@@ -47,7 +47,7 @@ def main():
         labels3 = tf.stack(batch['labels3']);
         with tf.GradientTape() as tape:
             outputs = yolov3(images);
-            loss = yolov3_loss(images,outputs,(labels1, labels2, labels3));
+            loss = yolov3_loss(outputs,(labels1, labels2, labels3));
             avg_loss.update_state(loss);
         # write log
         if tf.equal(optimizer.iterations % 100, 0):
