@@ -114,7 +114,10 @@ class OutputParser(tf.keras.Model):
         # 2) reshaped output feature
         # 3) box center proportional positions
         # 4) box proportional sizes
-        return grid, feats, box_xy, box_wh if calc_loss == True else box_xy, box_wh, box_confidence, box_class_probs;
+        if calc_loss == True:
+            return grid, feats, box_xy, box_wh
+        else:
+            box_xy, box_wh, box_confidence, box_class_probs;
 
 class YOLOv3Loss(tf.keras.Model):
     
