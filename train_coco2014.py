@@ -31,23 +31,20 @@ def main():
     print("training...");
     avg_loss = tf.keras.metrics.Mean(name = 'loss', dtype = tf.float32);
     while True:
-        images = list();
-        labels1 = list();
-        labels2 = list();
-        labels3 = list();
+        batch = {'images': list(), 'labels1': list(), 'labels2': list(), 'labels3': list()};
         count = 0;
         for feature in trainset:
             image, label1, label2, label3 = map_function_impl(tf.squeeze(feature["image"],[0]), tf.squeeze(feature["objects"]["bbox"],[0]), tf.squeeze(feature["objects"]["label"],[0]));
-            images.append(image);
-            labels1.append(label1);
-            labels2.append(label2);
-            labels3.append(label3);
+            batch['images'].append(image);
+            batch['labels1'].append(label1);
+            batch['labels2'].append(label2);
+            batch['labels3'].append(label3);
             count = count + 1;
             if count == batch_size: break;
-        images = tf.stack(images);
-        labels1 = tf.stack(labels1);
-        labels2 = tf.stack(labels2);
-        labels3 = tf.stack(labels3);
+        images = tf.stack(batch['images']);
+        labels1 = tf.stack(batch['labels1']);
+        labels2 = tf.stack(batch['labels2']);
+        labels3 = tf.stack(batch['labels3']);
         with tf.GradientTape() as tape:
             outputs = yolov3(images);
             loss = yolov3_loss(images,outputs,(labels1, labels2, labels3));
