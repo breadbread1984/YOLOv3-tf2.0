@@ -180,7 +180,7 @@ class YOLOv3Loss(tf.keras.Model):
             anchors_tensor = tf.constant(self.anchors[self.anchor_mask[l]], dtype = tf.float32);
             # (delta x, delta y) = (proportional x, proportional y) * (feature map.width, feature map.height) - (priorbox upper left x,priorbox upper left y)
             # true box's delta x, delta y: raw_true_xy.shape = (batch,h,w,anchor_num,2)
-            raw_true_xy = labels[l][...,:2] * tf.reverse(grid_shapes[l], axis = [0]) - grid;
+            raw_true_xy = labels[l][...,:2] * tf.cast(tf.reverse(grid_shapes[l], axis = [0]), dtype = tf.float32) - grid;
             # (width scale, height scale) = (proportional width, proportional height) * (image.width, image.height) / (anchor width, anchor height)
             # true box's width scale,height scale: raw_true_wh.shape = (batch,h,w,anchor_num,2)
             raw_true_wh = tf.math.log(labels[l][..., 2:4] * tf.cast(tf.reverse(input_shape, axis = [0]),dtype = tf.float32) / anchors_tensor);
