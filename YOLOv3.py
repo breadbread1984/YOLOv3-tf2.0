@@ -5,6 +5,8 @@ import tensorflow as tf;
 
 # NOTE: using functional API can save a lot of gmem
 
+YOLOv3_anchors = np.array([[10,13],[16,30],[33,23],[30,61],[62,45],[59,119],[116,90],[156,198],[373,326]], dtype = np.int32);
+
 def ConvBlock(input_shape, filters, kernel_size, strides = (1,1), padding = None):
     # 3 layers in total
 
@@ -53,8 +55,9 @@ def Output(input_shape, input_filters, output_filters):
     cb7 = ConvBlock(cb6.shape[1:], filters = output_filters, kernel_size = (1,1))(cb6);
     return tf.keras.Model(inputs = inputs, outputs = (cb5,cb7));
 
-def YOLOv3(input_shape, anchor_num, class_num):
+def YOLOv3(input_shape, class_num):
     
+    anchor_num = YOLOv3_anchors.shape[0] // 3;
     inputs = tf.keras.Input(shape = input_shape);
     body = Body(inputs.shape[1:]);
     large,middle,small = body(inputs);
@@ -121,17 +124,16 @@ class OutputParser(tf.keras.Model):
 
 class YOLOv3Loss(tf.keras.Model):
     
-    PRESET_ANCHORS = np.array([[10,13],[16,30],[33,23],[30,61],[62,45],[59,119],[116,90],[156,198],[373,326]], dtype = np.int32);
-    
-    def __init__(self, anchors = PRESET_ANCHORS, class_num = None, ignore_thresh = .5):
+    def __init__(self, input_shape, class_num = None, ignore_thresh = .5):
         
         super(YOLOv3Loss,self).__init__();
-        self.num_layers = anchors.shape[0] // 3;
-        self.anchors = anchors;
+        self.input_shape_ = input_shape[:2];
+        self.num_layers = YOLOv3_anchors.shape[0] // 3;
+        self.anchors = YOLOv3_anchors;
         # which anchor ratios are used for each layer of output
         self.anchor_mask = [[6,7,8],[3,4,5],[0,1,2]] if self.num_layers == 3 else [[3,4,5],[0,1,2]];
-        self.class_num = class_num;
         self.ignore_thresh = ignore_thresh;
+        self.output_parsers = [OutputParser(self.anchors[self.anchor_mask[l]], class_num, self.input_shape_) for l in range(self.num_layers)];
 
     def call(self, outputs, labels):
 
@@ -142,8 +144,6 @@ class YOLOv3Loss(tf.keras.Model):
         # NOTE: the info carried by the output and the label is different.
         assert type(outputs) is tuple;
         assert len(outputs) == self.num_layers;
-        # get the input image size according to first output layer
-        input_shape = tf.shape(outputs[0])[1:3] * 32;
         # grid size of all layers
         grid_shapes = [tf.shape(outputs[l])[1:3] for l in range(self.num_layers)];
         # get batch size
@@ -157,7 +157,7 @@ class YOLOv3Loss(tf.keras.Model):
             # 1) ignore masks
             # class type: true_class_probs.shape = (batch,h,w,anchor_num,class_num)
             true_class_probs = labels[l][...,5:];
-            grid, raw_pred, pred_xy, pred_wh = OutputParser(self.anchors[self.anchor_mask[l]], self.class_num, input_shape)(outputs[l], calc_loss = True);
+            grid, raw_pred, pred_xy, pred_wh = self.output_parsers[l](outputs[l], calc_loss = True);
             # box proportional coordinates: pred_box.shape = (batch,h,w,anchor_num,4)
             pred_box = tf.concat([pred_xy, pred_wh], axis = -1);
             # boolean_mask doesnt support batch, so have to iterate over each of batch
@@ -183,7 +183,7 @@ class YOLOv3Loss(tf.keras.Model):
             raw_true_xy = labels[l][...,:2] * tf.cast(tf.reverse(grid_shapes[l], axis = [0]), dtype = tf.float32) - grid;
             # (width scale, height scale) = (proportional width, proportional height) * (image.width, image.height) / (anchor width, anchor height)
             # true box's width scale,height scale: raw_true_wh.shape = (batch,h,w,anchor_num,2)
-            raw_true_wh = tf.math.log(labels[l][..., 2:4] * tf.cast(tf.reverse(input_shape, axis = [0]),dtype = tf.float32) / anchors_tensor);
+            raw_true_wh = tf.math.log(labels[l][..., 2:4] * tf.cast(tf.reverse(self.input_shape_, axis = [0]),dtype = tf.float32) / anchors_tensor);
             # filter out none object anchor boxes
             raw_true_wh = tf.where(tf.concat([object_mask_bool,object_mask_bool], axis = -1), raw_true_wh, tf.zeros_like(raw_true_wh));
             # 2 - proportional area = 2 - proportional width * proportional height

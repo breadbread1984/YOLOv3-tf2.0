@@ -14,9 +14,8 @@ batch_size = 16; # images of different sizes can't be stack into a batch
 def main():
 
     # yolov3 model
-    anchors = np.array([[10,13],[16,30],[33,23],[30,61],[62,45],[59,119],[116,90],[156,198],[373,326]], dtype = np.int32);
-    yolov3 = YOLOv3((416,416,3), anchors.shape[0] // 3, 80);
-    yolov3_loss = YOLOv3Loss(anchors, 80);
+    yolov3 = YOLOv3((416,416,3), 80);
+    yolov3_loss = YOLOv3Loss((416,416,3), 80);
     # load downloaded dataset
     trainset = tfds.load(name = "coco2014", split = tfds.Split.TRAIN, download = False);
     trainset = trainset.repeat().batch(1).prefetch(tf.data.experimental.AUTOTUNE);
