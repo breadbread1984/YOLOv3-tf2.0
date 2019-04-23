@@ -55,8 +55,8 @@ def main():
                 tf.summary.scalar('loss',avg_loss.result(), step = optimizer.iterations);
             print('Step #%d Loss: %.6f' % (optimizer.iterations, avg_loss.result()));
             avg_loss.reset_states();
-        grads = tape.gradient(loss, model.trainable_variables);
-        optimizer.apply_gradients(zip(grads, model.trainable_variables));
+        grads = tape.gradient(loss, yolov3.trainable_variables);
+        optimizer.apply_gradients(zip(grads, yolov3.trainable_variables));
         # save model
         if tf.equal(optimizer.iterations % 1000, 0):
             checkpoint.save(os.path.join('checkpoints','ckpt'));
