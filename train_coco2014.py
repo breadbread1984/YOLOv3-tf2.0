@@ -8,6 +8,7 @@ from YOLOv3 import YOLOv3, YOLOv3Loss;
 from preprocess import map_function_impl;
 
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1';
+os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3';
 #os.environ['CUDA_VISIBLE_DEVICES'] = '';
 batch_size = 16; # images of different sizes can't be stack into a batch
 

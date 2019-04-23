@@ -78,33 +78,33 @@ def YOLOv3(input_shape, class_num):
 
 class OutputParser(tf.keras.Model):
     
-    def __init__(self, anchors, class_num, input_shape):
+    def __init__(self, anchors, class_num, input_shape, output_shape):
 
         # NOTE: input_shape is given in (input height, input width) order
         # anchors: the sizes of all anchor boxes
         # class_num: the class num of objects
         # input_shape: the size of the input image
         super(OutputParser, self).__init__();
-        self.anchors_tensor = tf.constant(anchors, dtype = tf.float32);
+        self.anchors_tensor = anchors;
         self.anchor_num = anchors.shape[0];
         self.class_num = class_num;
         self.input_shape_ = input_shape;
+        self.grid_shape = tf.convert_to_tensor(output_shape, dtype = tf.int32);
+        # [x,y] = meshgrid(x,y) get the upper left positions of prior boxes
+        grid_y = tf.tile(tf.reshape(tf.range(tf.cast(self.grid_shape[0], dtype = tf.float32), dtype = tf.float32),[-1, 1, 1, 1]),[1, self.grid_shape[1], 1, 1]);
+        grid_x = tf.tile(tf.reshape(tf.range(tf.cast(self.grid_shape[1], dtype = tf.float32), dtype = tf.float32),[1, -1, 1, 1]),[self.grid_shape[0], 1, 1, 1]);
+        self.grid = tf.concat([grid_x, grid_y], axis = -1);
 
     def call(self, feats, calc_loss = False):
         
         # feats.shape = batch x h x w x anchor_num x (1(delta x) + 1(delta y) + 1(width scale) + 1(height scale) + 1(object mask) + class_num(class probability))
         # NOTE: box center absolute x = delta x + prior box upper left x, box center absolute y = delta y + prior box upper left y
         # NOTE: width scale = box width / anchor width,  height scale = box height / anchor height
-        grid_shape = tf.shape(feats)[1:3]; #(height, width)
-        # [x,y] = meshgrid(x,y) get the upper left positions of prior boxes
-        grid_y = tf.tile(tf.reshape(tf.convert_to_tensor(range(grid_shape[0]), dtype = tf.float32),[-1, 1, 1, 1]),[1, grid_shape[1], 1, 1]);
-        grid_x = tf.tile(tf.reshape(tf.convert_to_tensor(range(grid_shape[1]), dtype = tf.float32),[1, -1, 1, 1]),[grid_shape[0], 1, 1, 1]);
-        grid = tf.concat([grid_x, grid_y], axis = -1);
         # reshape features
-        feats = tf.reshape(feats, (-1, grid_shape[0], grid_shape[1], self.anchor_num, self.class_num + 5));
+        feats = tf.reshape(feats, (-1, self.grid_shape[0], self.grid_shape[1], self.anchor_num, self.class_num + 5));
         # box center proportional position = (delta x, delta y) + (priorbox upper left x,priorbox upper left y) / (feature map.width, feature map.height)
         # box_xy.shape = (batch,h,w,anchor_num,2)
-        box_xy = (tf.math.sigmoid(feats[..., 0:2]) + grid) / tf.cast(tf.reverse(grid_shape, axis = [0]),dtype = tf.float32);
+        box_xy = (tf.math.sigmoid(feats[..., 0:2]) + self.grid) / tf.cast(tf.reverse(self.grid_shape, axis = [0]),dtype = tf.float32);
         # box proportional size = (width scale, height scale) * (anchor width, anchor height) / (image.width, image.height)
         # box_wh.shape = (batch,h,w,anchor_num,2)
         box_wh = tf.exp(feats[..., 2:4]) * self.anchors_tensor / tf.cast(tf.reverse(self.input_shape_, axis = [0]),dtype = tf.float32);
@@ -118,7 +118,7 @@ class OutputParser(tf.keras.Model):
         # 3) box center proportional positions
         # 4) box proportional sizes
         if calc_loss == True:
-            return grid, feats, box_xy, box_wh
+            return self.grid, feats, box_xy, box_wh
         else:
             box_xy, box_wh, box_confidence, box_class_probs;
 
@@ -129,11 +129,21 @@ class YOLOv3Loss(tf.keras.Model):
         super(YOLOv3Loss,self).__init__();
         self.input_shape_ = input_shape[:2];
         self.num_layers = YOLOv3_anchors.shape[0] // 3;
-        self.anchors = YOLOv3_anchors;
         # which anchor ratios are used for each layer of output
-        self.anchor_mask = [[6,7,8],[3,4,5],[0,1,2]] if self.num_layers == 3 else [[3,4,5],[0,1,2]];
         self.ignore_thresh = ignore_thresh;
-        self.output_parsers = [OutputParser(self.anchors[self.anchor_mask[l]], class_num, self.input_shape_) for l in range(self.num_layers)];
+        anchor_mask = [[6,7,8],[3,4,5],[0,1,2]] if self.num_layers == 3 else [[3,4,5],[0,1,2]];
+        self.anchors_tensors = [tf.convert_to_tensor(YOLOv3_anchors[anchor_mask[l]], dtype = tf.float32) for l in range(self.num_layers)];
+        self.output_parsers = [
+            OutputParser(
+                self.anchors_tensors[l], 
+                class_num, 
+                self.input_shape_, 
+                {
+                    0:(self.input_shape_[0] // 32,self.input_shape_[1] // 32),
+                    1:(self.input_shape_[0] // 16, self.input_shape_[1] // 16),
+                    2:(self.input_shape_[0] // 8, self.input_shape_[1] // 8)
+                }[l]
+            ) for l in range(self.num_layers)];
 
     def call(self, outputs, labels):
 
@@ -176,14 +186,12 @@ class YOLOv3Loss(tf.keras.Model):
             # ignore_masks.shape = (batch, h, w, anchor_num, 1)
             ignore_masks = tf.expand_dims(ignore_masks, axis = -1);
             # 2) loss
-            # anchor box sizes: anchors_tensor.shape = (anchor_num, 2)
-            anchors_tensor = tf.constant(self.anchors[self.anchor_mask[l]], dtype = tf.float32);
             # (delta x, delta y) = (proportional x, proportional y) * (feature map.width, feature map.height) - (priorbox upper left x,priorbox upper left y)
             # true box's delta x, delta y: raw_true_xy.shape = (batch,h,w,anchor_num,2)
             raw_true_xy = labels[l][...,:2] * tf.cast(tf.reverse(grid_shapes[l], axis = [0]), dtype = tf.float32) - grid;
             # (width scale, height scale) = (proportional width, proportional height) * (image.width, image.height) / (anchor width, anchor height)
             # true box's width scale,height scale: raw_true_wh.shape = (batch,h,w,anchor_num,2)
-            raw_true_wh = tf.math.log(labels[l][..., 2:4] * tf.cast(tf.reverse(self.input_shape_, axis = [0]),dtype = tf.float32) / anchors_tensor);
+            raw_true_wh = tf.math.log(labels[l][..., 2:4] * tf.cast(tf.reverse(self.input_shape_, axis = [0]),dtype = tf.float32) / self.anchors_tensors[l]);
             # filter out none object anchor boxes
             raw_true_wh = tf.where(tf.concat([object_mask_bool,object_mask_bool], axis = -1), raw_true_wh, tf.zeros_like(raw_true_wh));
             # 2 - proportional area = 2 - proportional width * proportional height
@@ -243,6 +251,5 @@ class YOLOv3Loss(tf.keras.Model):
 
 if __name__ == "__main__":
     
-    anchors = np.array([[10,13],[16,30],[33,23],[30,61],[62,45],[59,119],[116,90],[156,198],[373,326]], dtype = np.int32);
-    yolov3 = YOLOv3(anchors.shape[0] // 3, 80);
-    yolov3_loss = YOLOv3Loss(anchors, 80);
+    yolov3 = YOLOv3((416,416,3), 80);
+    yolov3_loss = YOLOv3Loss((416,416,3), 80);
