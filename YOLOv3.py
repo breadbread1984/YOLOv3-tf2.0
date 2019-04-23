@@ -85,7 +85,7 @@ class OutputParser(tf.keras.Model):
         self.anchors_tensor = tf.constant(anchors, dtype = tf.float32);
         self.anchor_num = anchors.shape[0];
         self.class_num = class_num;
-        self.input_shape = input_shape;
+        self.input_shape_ = input_shape;
 
     def call(self, feats, calc_loss = False):
         
@@ -104,7 +104,7 @@ class OutputParser(tf.keras.Model):
         box_xy = (tf.math.sigmoid(feats[..., 0:2]) + grid) / tf.cast(tf.reverse(grid_shape, axis = [0]),dtype = tf.float32);
         # box proportional size = (width scale, height scale) * (anchor width, anchor height) / (image.width, image.height)
         # box_wh.shape = (batch,h,w,anchor_num,2)
-        box_wh = tf.exp(feats[..., 2:4]) * self.anchors_tensor / tf.cast(tf.reverse(self.input_shape, axis = [0]),dtype = tf.float32);
+        box_wh = tf.exp(feats[..., 2:4]) * self.anchors_tensor / tf.cast(tf.reverse(self.input_shape_, axis = [0]),dtype = tf.float32);
         # confidence of being an object
         box_confidence = tf.math.sigmoid(feats[..., 4:5]);
         # class confidence
