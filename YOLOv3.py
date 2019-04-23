@@ -185,7 +185,7 @@ class YOLOv3Loss(tf.keras.Model):
             # true box's width scale,height scale: raw_true_wh.shape = (batch,h,w,anchor_num,2)
             raw_true_wh = tf.math.log(labels[l][..., 2:4] * tf.cast(tf.reverse(input_shape, axis = [0]),dtype = tf.float32) / anchors_tensor);
             # filter out none object anchor boxes
-            raw_true_wh = tf.where(tf.stack([object_mask_bool,object_mask_bool], axis = -1), raw_true_wh, tf.zeros_like(raw_true_wh));
+            raw_true_wh = tf.where(tf.stack([object_mask_bool,object_mask_bool], axis = -2), raw_true_wh, tf.zeros_like(raw_true_wh));
             # 2 - proportional area = 2 - proportional width * proportional height
             # box area is larger, loss is smaller
             box_loss_scale = 2 - labels[l][...,2:3] * labels[l][...,3:4];
