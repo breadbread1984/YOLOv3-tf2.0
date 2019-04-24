@@ -8,9 +8,9 @@ from YOLOv3 import YOLOv3, YOLOv3Loss;
 from preprocess import map_function_impl;
 
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1';
-os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3';
+#os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3';
 #os.environ['CUDA_VISIBLE_DEVICES'] = '';
-batch_size = 16; # images of different sizes can't be stack into a batch
+batch_size = 14; # images of different sizes can't be stack into a batch
 
 def main():
 
@@ -30,37 +30,38 @@ def main():
     # train model
     print("training...");
     avg_loss = tf.keras.metrics.Mean(name = 'loss', dtype = tf.float32);
-    while True:
-        batch = {'images': list(), 'labels1': list(), 'labels2': list(), 'labels3': list()};
-        count = 0;
-        for feature in trainset:
-            image, label1, label2, label3 = map_function_impl(tf.squeeze(feature["image"],[0]), tf.squeeze(feature["objects"]["bbox"],[0]), tf.squeeze(feature["objects"]["label"],[0]));
-            batch['images'].append(image);
-            batch['labels1'].append(label1);
-            batch['labels2'].append(label2);
-            batch['labels3'].append(label3);
-            count = count + 1;
-            if count == batch_size: break;
-        images = tf.stack(batch['images']);
-        labels1 = tf.stack(batch['labels1']);
-        labels2 = tf.stack(batch['labels2']);
-        labels3 = tf.stack(batch['labels3']);
-        with tf.GradientTape() as tape:
-            outputs = yolov3(images);
-            loss = yolov3_loss(outputs,(labels1, labels2, labels3));
-            avg_loss.update_state(loss);
-        # write log
-        if tf.equal(optimizer.iterations % 100, 0):
-            with log.as_default():
-                tf.summary.scalar('loss',avg_loss.result(), step = optimizer.iterations);
+    count = 0;
+    batch = {'images': list(), 'labels1': list(), 'labels2': list(), 'labels3': list()};
+    for feature in trainset:
+        image, label1, label2, label3 = map_function_impl(tf.squeeze(feature["image"],[0]), tf.squeeze(feature["objects"]["bbox"],[0]), tf.squeeze(feature["objects"]["label"],[0]));
+        batch['images'].append(image);
+        batch['labels1'].append(label1);
+        batch['labels2'].append(label2);
+        batch['labels3'].append(label3);
+        count = count + 1;
+        if count == batch_size:
+            images = tf.stack(batch['images']);
+            labels1 = tf.stack(batch['labels1']);
+            labels2 = tf.stack(batch['labels2']);
+            labels3 = tf.stack(batch['labels3']);
+            # reset buffer
+            count = 0;
+            batch = {'images': list(), 'labels1': list(), 'labels2': list(), 'labels3': list()};
+            with tf.GradientTape() as tape:
+                outputs = yolov3(images);
+                loss = yolov3_loss(outputs,(labels1, labels2, labels3));
+                avg_loss.update_state(loss);
             print('Step #%d Loss: %.6f' % (optimizer.iterations, avg_loss.result()));
-            avg_loss.reset_states();
-        grads = tape.gradient(loss, yolov3.trainable_variables);
-        optimizer.apply_gradients(zip(grads, yolov3.trainable_variables));
-        # save model
-        if tf.equal(optimizer.iterations % 1000, 0):
-            checkpoint.save(os.path.join('checkpoints','ckpt'));
-        if loss < 0.01: break;
+            # write log
+            if tf.equal(optimizer.iterations % 10, 0):
+                with log.as_default():
+                    tf.summary.scalar('loss',avg_loss.result(), step = optimizer.iterations);
+                avg_loss.reset_states();
+            grads = tape.gradient(loss, yolov3.trainable_variables);
+            optimizer.apply_gradients(zip(grads, yolov3.trainable_variables));
+            # save model
+            if tf.equal(optimizer.iterations % 10, 0):
+                checkpoint.save(os.path.join('checkpoints','ckpt'));
 
 if __name__ == "__main__":
     
