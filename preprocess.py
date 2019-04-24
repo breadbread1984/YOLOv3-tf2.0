@@ -16,7 +16,7 @@ import tensorflow_datasets as tfds;
 # }
 
 # anchor boxes are given in (width, height) order
-PRESET_ANCHORS = np.array([[10,13],[16,30],[33,23],[30,61],[62,45],[59,119],[116,90],[156,198],[373,326]], dtype = np.int32);
+YOLOv3_anchors = np.array([[10,13],[16,30],[33,23],[30,61],[62,45],[59,119],[116,90],[156,198],[373,326]], dtype = np.int32);
 
 def map_function(feature):
 
@@ -124,7 +124,7 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
         # return
         return tf.squeeze(image_data), bbox;
 
-def bbox_to_tensor(bbox, label, input_shape = (416,416), anchors = PRESET_ANCHORS, num_classes = 80):
+def bbox_to_tensor(bbox, label, input_shape = (416,416), anchors = YOLOv3_anchors, num_classes = 80):
 
     # NOTE: input_shape is given in (input height, input width) order
     # bbox.shape = (box num, 4) which represents (ymin,xmin,ymax,xmax)
