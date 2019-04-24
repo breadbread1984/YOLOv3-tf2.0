@@ -61,7 +61,6 @@ def YOLOv3(input_shape, class_num):
     inputs = tf.keras.Input(shape = input_shape);
     body = Body(inputs.shape[1:]);
     large,middle,small = body(inputs);
-    assert len(body.layers) == 7;
     # feature for detecting large scale objects
     x1,y1 = Output(large.shape[1:], 512, anchor_num * (class_num + 5))(large);
     # feature for detecting middle scale objects
