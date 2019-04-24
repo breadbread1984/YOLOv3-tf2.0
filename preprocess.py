@@ -115,6 +115,7 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
         image_data = tf.image.random_saturation(image_data, lower = 1./sat, upper = sat);
         image_data = tf.image.random_brightness(image_data, bri);
         # discard invalid boxes (small box or box having negative width or height)
+        bbox = tf.clip_by_value(bbox,0,1); # restrict the min and max coordinates
         bbox_hw = bbox[...,2:4] - bbox[...,0:2] # bbox_hw.shape = (bbox_num,2)
         bbox_hw = bbox_hw * tf.convert_to_tensor(input_shape, dtype = tf.float32);
         valid = tf.math.logical_and(bbox_hw[...,0] > 1,bbox_hw[...,1] > 1); # valid.shape = (bbox_num)
