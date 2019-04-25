@@ -50,8 +50,8 @@ def main():
             with tf.GradientTape() as tape:
                 outputs = yolov3(images);
                 loss = yolov3_loss(outputs,(labels1, labels2, labels3));
-                avg_loss.update_state(loss);
-            print('Step #%d Loss: %.6f' % (optimizer.iterations, avg_loss.result()));
+            avg_loss.update_state(loss);
+            print('Step #%d Loss: %.6f' % (optimizer.iterations, loss));
             # write log
             if tf.equal(optimizer.iterations % 10, 0):
                 with log.as_default():
