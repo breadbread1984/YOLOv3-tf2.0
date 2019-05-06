@@ -172,7 +172,7 @@ class YOLOv3Loss(tf.keras.Model):
             # box proportional coordinates: pred_box.shape = (batch,h,w,anchor_num,4)
             pred_box = tf.concat([pred_xy, pred_wh], axis = -1);
             # boolean_mask doesnt support batch, so have to iterate over each of batch
-            ignore_masks = list();
+            ignore_masks = tf.TensorArray(tf.float32,batch_size);
             for b in range(batch_size):
                 # true boxes proportional coordinates of this layer and current batch
                 true_box = tf.boolean_mask(labels[l][b,...,0:4], object_mask_bool[b,...,0]);
@@ -182,8 +182,8 @@ class YOLOv3Loss(tf.keras.Model):
                 best_iou = tf.math.reduce_max(iou, axis = -1);
                 # ignore anchor box with iou below given threshold
                 ignore_mask = tf.where(tf.less(best_iou,self.ignore_thresh),tf.ones_like(best_iou),tf.zeros_like(best_iou));
-                ignore_masks.append(ignore_mask);
-            ignore_masks = tf.stack(ignore_masks);
+                ignore_masks.write(b,ignore_mask);
+            ignore_masks = ignore_masks.stack();
             # ignore_masks.shape = (batch, h, w, anchor_num, 1)
             ignore_masks = tf.expand_dims(ignore_masks, axis = -1);
             # 2) loss
@@ -220,8 +220,8 @@ class YOLOv3Loss(tf.keras.Model):
     def box_iou(self, b1, b2):
         
         # calculate ious of given boxes' proportional coordinates
-        assert len(b1.shape) == 4 and b1.shape[-1] == 4;
-        assert len(b2.shape) == 2 and b2.shape[-1] == 4;
+        #assert len(tf.shape(b1)) == 4 and tf.shape(b1)[-1] == 4;
+        #assert len(tf.shape(b2)) == 2 and tf.shape(b2)[-1] == 4;
         # b1.shape = (h,w,anchor_num,1,4)
         b1 = tf.expand_dims(b1, axis = -2);
         b1_xy = b1[...,:2];
