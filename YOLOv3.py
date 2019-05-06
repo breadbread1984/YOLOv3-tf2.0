@@ -94,6 +94,7 @@ class OutputParser(tf.keras.Model):
         grid_x = tf.tile(tf.reshape(tf.range(tf.cast(self.grid_shape[1], dtype = tf.float32), dtype = tf.float32),[1, -1, 1, 1]),[self.grid_shape[0], 1, 1, 1]);
         self.grid = tf.concat([grid_x, grid_y], axis = -1);
 
+    @tf.function
     def call(self, feats, calc_loss = False):
         
         # feats.shape = batch x h x w x anchor_num x (1(delta x) + 1(delta y) + 1(width scale) + 1(height scale) + 1(object mask) + class_num(class probability))
@@ -144,6 +145,7 @@ class YOLOv3Loss(tf.keras.Model):
                 }[l]
             ) for l in range(self.num_layers)];
 
+    @tf.function
     def call(self, outputs, labels):
 
         # outputs is a tuple
@@ -214,6 +216,7 @@ class YOLOv3Loss(tf.keras.Model):
 
         return loss;
 
+    @tf.function
     def box_iou(self, b1, b2):
         
         # calculate ious of given boxes' proportional coordinates
