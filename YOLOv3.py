@@ -120,7 +120,7 @@ class OutputParser(tf.keras.Model):
         if calc_loss == True:
             return self.grid, feats, box_xy, box_wh
         else:
-            box_xy, box_wh, box_confidence, box_class_probs;
+            return box_xy, box_wh, box_confidence, box_class_probs;
 
 class YOLOv3Loss(tf.keras.Model):
     
