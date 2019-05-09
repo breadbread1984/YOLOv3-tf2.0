@@ -66,7 +66,7 @@ def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3
         # resize image to the randomly sampled input shape
         aspect_ratio_jitter = tf.random.uniform(shape = [2], minval = 1-jitter, maxval = 1+jitter, dtype = tf.float32);
         resize_input_shape = tf.convert_to_tensor(input_shape, dtype = tf.float32) * aspect_ratio_jitter;
-        scale = tf.random.uniform(shape=[1], minval = .25, maxval = 2, dtype = tf.float32);
+        scale = tf.random.uniform(shape=[1], minval = .8, maxval = 1.2, dtype = tf.float32);
         resize_shape = tf.cond(tf.greater(resize_input_shape[0],resize_input_shape[1]),true_fn = lambda: scale * resize_input_shape / aspect_ratio_jitter[0], false_fn = lambda: scale * resize_input_shape / aspect_ratio_jitter[1]);
         resize_shape = tf.cast(resize_shape, dtype = tf.int32);
         resize_image = tf.image.resize(image, resize_shape, method = tf.image.ResizeMethod.BICUBIC);
@@ -181,3 +181,55 @@ def bbox_to_tensor(bbox, label, input_shape = (416,416), anchors = YOLOv3_anchor
                     y_true[l][i,j,k,5 + c] = 1; # class mask
 
     return y_true;
+
+if __name__ == "__main__":
+
+    assert tf.executing_eagerly();
+    test_num = 8;
+    trainset = tfds.load(name = "coco2014", split = tfds.Split.TRAIN, download = False);
+    import cv2;
+    # 1) test function preprocess
+    print("test function preprocess");
+    count = 0;
+    for feature in trainset:
+        print("test the %dth image" % (count+1));
+        image = feature["image"];
+        bbox = feature["objects"]["bbox"];
+        label = feature["objects"]["label"];
+        image, bbox = preprocess(image, bbox, random = True);
+        img = (image.numpy() * 255.).astype('uint8');
+        for box in bbox.numpy():
+            box = (box * 416).astype('int32');
+            cv2.rectangle(img, (box[1],box[0]), (box[3],box[2]), (0,255,0), 1);
+        cv2.imshow('img',img);
+        cv2.waitKey();
+        count = count + 1;
+        if count == test_num: break;
+    print('if you can see the picture and the bounding boxes at the right places, that means the function preprocess is OK!');
+
+    # 2) test function bbox_to_tensor
+    print("test function bbox_to_tensor");
+    count = 0;
+    for feature in trainset:
+        print("test the %dth image" % (count+1));
+        image = feature["image"];
+        bbox = feature["objects"]["bbox"];
+        label = feature["objects"]["label"];
+        image, bbox = preprocess(image, bbox, random = True);
+        label1,label2,label3 = bbox_to_tensor(bbox, label);
+        label1 = tf.reshape(label1[...,0:4],(-1,4)).numpy();
+        label2 = tf.reshape(label2[...,0:4],(-1,4)).numpy();
+        label3 = tf.reshape(label3[...,0:4],(-1,4)).numpy();
+        label1 = np.concatenate((label1[...,0:2] - label1[...,2:4] // 2,label1[...,0:2] + label1[...,2:4] // 2), axis = -1);
+        label2 = np.concatenate((label2[...,0:2] - label2[...,2:4] // 2,label2[...,0:2] + label2[...,2:4] // 2), axis = -1);
+        label3 = np.concatenate((label3[...,0:2] - label3[...,2:4] // 2,label3[...,0:2] + label3[...,2:4] // 2), axis = -1);
+        img = (image.numpy() * 255.).astype('uint8');
+        labels = np.concatenate((label1,label2,label3), axis = 0) * np.array([img.shape[1],img.shape[0],img.shape[1],img.shape[0]]);
+        for label in labels:
+            cv2.rectangle(img,tuple(label[0:2].astype('int32')),tuple(label[2:4].astype('int32')),(0,255,0),1);
+        cv2.imshow('img',img);
+        cv2.waitKey();
+        count = count + 1;
+        if count == test_num: break;
+    print('if you can see the picture and the bounding boxes at the right places, that means the function bbox_to_tensor is OK!');
+
