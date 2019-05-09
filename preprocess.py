@@ -207,7 +207,7 @@ if __name__ == "__main__":
         for box in bbox.numpy():
             box = (box * 416).astype('int32');
             cv2.rectangle(img, (box[1],box[0]), (box[3],box[2]), (0,255,0), 1);
-        cv2.imshow('img',img);
+        cv2.imshow('img',img[...,::-1]);
         cv2.waitKey();
         count = count + 1;
         if count == test_num: break;
@@ -233,7 +233,7 @@ if __name__ == "__main__":
         labels = np.concatenate((label1,label2,label3), axis = 0) * np.array([img.shape[1],img.shape[0],img.shape[1],img.shape[0]]);
         for label in labels:
             cv2.rectangle(img,tuple(label[0:2].astype('int32')),tuple(label[2:4].astype('int32')),(0,255,0),1);
-        cv2.imshow('img',img);
+        cv2.imshow('img',img[...,::-1]);
         cv2.waitKey();
         count = count + 1;
         if count == test_num: break;
