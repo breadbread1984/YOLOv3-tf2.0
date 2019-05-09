@@ -130,12 +130,12 @@ def bbox_to_tensor(bbox, label, input_shape = (416,416), anchors = YOLOv3_anchor
     # bbox.shape = (box num, 4) which represents (ymin,xmin,ymax,xmax)
     # label.shape = (box num)
     # anchors = (9,2)
-    assert tf.math.reduce_sum(tf.cast(label >= num_classes, dtype = tf.int32)).numpy() == 0;
+    tf.Assert(tf.equal(tf.reduce_all(label < num_classes),True),[label]);
     num_layers = len(anchors) // 3;
     anchor_mask = [[6,7,8],[3,4,5],[0,1,2]] if num_layers == 3 else [[3,4,5],[1,2,3]];
 
-    true_boxes_xy = tf.reverse(bbox[...,0:2] + bbox[...,2:4] // 2, axis = [-1]); # box center proportional position
-    true_boxes_wh = tf.reverse(bbox[...,2:4] - bbox[...,0:2], axis = [-1]); # box proportional size
+    true_boxes_xy = tf.reverse((bbox[...,0:2] + bbox[...,2:4]) / 2, axis = [-1]); # box center proportional position
+    true_boxes_wh = tf.reverse(tf.math.abs(bbox[...,2:4] - bbox[...,0:2]), axis = [-1]); # box proportional size
     true_boxes = tf.concat([true_boxes_xy, true_boxes_wh], axis = -1);
     input_shape_tensor = tf.reverse(tf.convert_to_tensor(input_shape, dtype = tf.float32), axis = [0]);
     boxes_xy = true_boxes[..., 0:2] * input_shape_tensor; # box center absolute position
