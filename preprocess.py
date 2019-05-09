@@ -31,6 +31,7 @@ def map_function_impl(image, bbox, label):
 
     return image, label1, label2, label3;
 
+@tf.function
 def preprocess(image, bbox, input_shape = (416,416), random = False, jitter = .3, hue = .1, sat = 1.5, bri = .1):
 
     # NOTE: input_shape is given in (input height, input width) order
