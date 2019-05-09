@@ -131,10 +131,11 @@ def bbox_to_tensor(bbox, label, input_shape = (416,416), anchors = YOLOv3_anchor
     # label.shape = (box num)
     # anchors = (9,2)
     tf.Assert(tf.equal(tf.reduce_all(label < num_classes),True),[label]);
-    num_layers = len(anchors) // 3;
-    anchor_mask = [[6,7,8],[3,4,5],[0,1,2]] if num_layers == 3 else [[3,4,5],[1,2,3]];
+    num_layers = anchors.shape[0] // 3;
+    tf.Assert(tf.equal(tf.reduce_any([tf.equal(num_layers,2),tf.equal(num_layers,3)]),True),[num_layers]);
+    anchor_mask = tf.cond(tf.equal(num_layers,3),lambda:tf.constant([[6,7,8],[3,4,5],[0,1,2]]),lambda:tf.constant([[3,4,5],[1,2,3]]));
 
-    true_boxes_xy = tf.reverse((bbox[...,0:2] + bbox[...,2:4]) / 2, axis = [-1]); # box center proportional position
+    true_boxes_xy = tf.reverse((bbox[...,0:2] + bbox[...,2:4]) / 2., axis = [-1]); # box center proportional position
     true_boxes_wh = tf.reverse(tf.math.abs(bbox[...,2:4] - bbox[...,0:2]), axis = [-1]); # box proportional size
     true_boxes = tf.concat([true_boxes_xy, true_boxes_wh], axis = -1);
     input_shape_tensor = tf.reverse(tf.convert_to_tensor(input_shape, dtype = tf.float32), axis = [0]);
@@ -142,7 +143,7 @@ def bbox_to_tensor(bbox, label, input_shape = (416,416), anchors = YOLOv3_anchor
     boxes_wh = true_boxes[..., 2:4] * input_shape_tensor; # box absolute size
 
     # create tensor for label: y_true.shape[layer] = (height, width, anchor num, 5 + class num)
-    y_true = tuple((tf.zeros(shape = (input_shape[0] // {0:32, 1:16, 2:8}[l], input_shape[1] // {0:32, 1:16, 2:8}[l], len(anchor_mask[l]), 5 + num_classes), dtype = tf.float32) for l in range(num_layers)));
+    y_true = tuple((np.zeros(shape = (input_shape[0] // {0:32, 1:16, 2:8}[l], input_shape[1] // {0:32, 1:16, 2:8}[l], tf.shape(anchor_mask[l,...])[0], 5 + num_classes), dtype = np.float32) for l in range(num_layers)));
 
     # center the anchor boxes at the origin, get the max and min of corners' (x,y)
     anchors = tf.expand_dims(tf.convert_to_tensor(anchors, dtype = tf.float32), 0); # anchors.shape = (1, 9, 2)
@@ -150,7 +151,7 @@ def bbox_to_tensor(bbox, label, input_shape = (416,416), anchors = YOLOv3_anchor
     anchor_mins = -anchor_maxes; # min of width, height, anchors_mins.shape = (1, 9, 2)
 
     # center the bbox at the origin, get the max and min of corners' (x,y)
-    valid_mask = boxes_wh[...,0] > 0; # valid box should have width > 0: valid_mask.shape = (box_num)
+    valid_mask = tf.greater(boxes_wh[...,0], 0); # valid box should have width > 0: valid_mask.shape = (box_num)
     wh = tf.boolean_mask(boxes_wh, valid_mask); # absolute size: wh.shape = (valid box num, 2)
     valid_true_boxes = tf.boolean_mask(true_boxes, valid_mask); # box proportional position: valid_true_boxes.shape = (valid box num, 4)
     valid_label = tf.boolean_mask(label, valid_mask); # valid_label.shape = (valid box num)
@@ -167,20 +168,24 @@ def bbox_to_tensor(bbox, label, input_shape = (416,416), anchors = YOLOv3_anchor
         anchor_area = anchors[...,0] * anchors[...,1]; # anchor_area.shape = (1, anchor num(9))
         iou = intersect_area / (box_area + anchor_area - intersect_area); # iou.shape = (valid box num, anchor num(9))
         # get the anchor box having maximum iou with each true bbbox
-        best_anchor = tf.math.argmax(iou, axis = -1); # best_anchor.shape = (valid box num)
+        best_anchor = tf.math.argmax(iou, axis = -1, output_type = tf.int32); # best_anchor.shape = (valid box num)
         # fill in label tensor
-        for t, n in enumerate(best_anchor):
-            for l in range(num_layers):
-                if n in anchor_mask[l]:
-                    i = int(valid_true_boxes[t,1] * y_true[l].shape[0]); # absolute center y = proportional y * grid_shape.height
-                    j = int(valid_true_boxes[t,0] * y_true[l].shape[1]); # absolute center x = proportional x * grid_shape.width
-                    k = anchor_mask[l].index(n); # best anchor box id
-                    c = valid_label[t]; # class
-                    y_true[l][i,j,k,0:4] = valid_true_boxes[t,0:4]; # box proportional position (w,y,width,height)
-                    y_true[l][i,j,k,4] = 1; # object mask
-                    y_true[l][i,j,k,5 + c] = 1; # class mask
+        for t in range(tf.shape(best_anchor)[0]):
+            n = best_anchor[t];
+            pos = tf.where(tf.equal(anchor_mask,n));
+            l = pos[0][0];
+            k = pos[0][1];
+            i = int(valid_true_boxes[t,1] * y_true[l].shape[0]); # absolute center y = proportional y * grid_shape.height
+            j = int(valid_true_boxes[t,0] * y_true[l].shape[1]); # absolute center x = proportional x * grid_shape.width
+            c = valid_label[t]; # class
+            y_true[l][i,j,k,0:4] = valid_true_boxes[t,0:4]; # box proportional position (w,y,width,height)
+            y_true[l][i,j,k,4] = 1; # object mask
+            y_true[l][i,j,k,5 + c] = 1; # class mask
 
-    return y_true;
+    if num_layers == 3:
+        return (tf.convert_to_tensor(y_true[0]), tf.convert_to_tensor(y_true[1]), tf.convert_to_tensor(y_true[2]));
+    else:
+        return (tf.convert_to_tensor(y_true[0]), tf.convert_to_tensor(y_true[1]));
 
 if __name__ == "__main__":
 
@@ -220,9 +225,9 @@ if __name__ == "__main__":
         label1 = tf.reshape(label1[...,0:4],(-1,4)).numpy();
         label2 = tf.reshape(label2[...,0:4],(-1,4)).numpy();
         label3 = tf.reshape(label3[...,0:4],(-1,4)).numpy();
-        label1 = np.concatenate((label1[...,0:2] - label1[...,2:4] // 2,label1[...,0:2] + label1[...,2:4] // 2), axis = -1);
-        label2 = np.concatenate((label2[...,0:2] - label2[...,2:4] // 2,label2[...,0:2] + label2[...,2:4] // 2), axis = -1);
-        label3 = np.concatenate((label3[...,0:2] - label3[...,2:4] // 2,label3[...,0:2] + label3[...,2:4] // 2), axis = -1);
+        label1 = np.concatenate((label1[...,0:2] - label1[...,2:4] / 2,label1[...,0:2] + label1[...,2:4] / 2), axis = -1);
+        label2 = np.concatenate((label2[...,0:2] - label2[...,2:4] / 2,label2[...,0:2] + label2[...,2:4] / 2), axis = -1);
+        label3 = np.concatenate((label3[...,0:2] - label3[...,2:4] / 2,label3[...,0:2] + label3[...,2:4] / 2), axis = -1);
         img = (image.numpy() * 255.).astype('uint8');
         labels = np.concatenate((label1,label2,label3), axis = 0) * np.array([img.shape[1],img.shape[0],img.shape[1],img.shape[0]]);
         for label in labels:
