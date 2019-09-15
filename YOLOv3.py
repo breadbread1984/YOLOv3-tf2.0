@@ -76,24 +76,24 @@ def YOLOv3(input_shape, class_num):
 
 def OutputParser(input_shape, img_shape, anchors, calc_loss = False):
 
-    # feats.shape = batch x h x w x anchor_num x (1(delta x) + 1(delta y) + 1(width scale) + 1(height scale) + 1(object mask) + class_num(class probability))
+    # feats.shape = batch x grid h x grid w x anchor_num x (1(delta x) + 1(delta y) + 1(width scale) + 1(height scale) + 1(object mask) + class_num(class probability))
     # NOTE: box center absolute x = delta x + prior box upper left x, box center absolute y = delta y + prior box upper left y
     # NOTE: width scale = box width / anchor width,  height scale = box height / anchor height
-    tf.debugging.Assert(tf.equal(tf.shape(input_shape)[0],5), [input_shape]);
+    tf.debugging.Assert(tf.math.logical_and(tf.equal(tf.shape(input_shape)[0],4), tf.equal(input_shape[2], 3)), [input_shape]);
     tf.debugging.Assert(tf.equal(tf.shape(img_shape)[0],3), [img_shape]);
-    tf.debugging.Assert(tf.equal(tf.shape(tf.shape(anchors))[0], 2), [anchors]);
-    tf.debugging.Assert(tf.equal(tf.shape(anchors)[1], 2), [anchors]);
-    tf.debugging.Assert(tf.equal(tf.shape(anchors)[0], input_shape[3]), [anchors, input_shape]);
+    # anchors.shape = (3,2)
+    tf.debugging.Assert(tf.math.logical_and(tf.equal(anchors.shape[0], 3), tf.equal(anchors.shape[1], 2)), [anchors]);
     feats = tf.keras.Input(input_shape);
     # [x,y] = meshgrid(x,y) get the upper left positions of prior boxes
+    # grid.shape = (grid h, grid w, 1, 2)
     grid_y = tf.keras.layers.Lambda(lambda x: tf.tile(tf.reshape(tf.range(x.shape[1]), (-1, 1, 1, 1)), (1, x.shape[2], 1, 1)))(feats);
     grid_x = tf.keras.layers.Lambda(lambda x: tf.tile(tf.reshape(tf.range(x.shape[2]), (1, -1, 1, 1)), (x.shape[1], 1, 1, 1)))(feats);
-    grid = tf.keras.layers.Concatenate()([grid_x, grid_y]);
+    grid = tf.keras.layers.Concatenate(axis = -1)([grid_x, grid_y]);
     # box center proportional position = (delta x, delta y) + (priorbox upper left x,priorbox upper left y) / (feature map.width, feature map.height)
-    # box_xy.shape = (batch,h,w,anchor_num,2)
+    # box_xy.shape = (batch, grid h, grid w, anchor_num, 2)
     box_xy = tf.keras.layers.Lambda(lambda x: (tf.math.sigmoid(x[0][...,0:2]) + x[1]) / tf.cast([x[1].shape[2], x[1].shape[1]], dtype = tf.float32))([feats, grid]);
     # box proportional size = (width scale, height scale) * (anchor width, anchor height) / (image.width, image.height)
-    # box_wh.shape = (batch,h,w,anchor_num,2)
+    # box_wh.shape = (batch, grid h, grid w, anchor_num, 2)
     box_wh = tf.keras.layers.Lambda(lambda x, anchors, img_shape: tf.math.exp(feats[...,2:4]) * anchors / tf.cast([img_shape[1], img_shape[0]], dtype = tf.float32), arguments = {'anchors': anchors, 'img_shape': img_shape})(feats);
     # confidence of being an object
     box_confidence = tf.keras.layers.Lambda(lambda x: tf.math.sigmoid(x[..., 4:5]))(feats);
@@ -108,134 +108,97 @@ def OutputParser(input_shape, img_shape, anchors, calc_loss = False):
     else:
         return tf.keras.Model(inputs = feats, outputs = (box_xy, box_wh, box_confidence, box_class_probs));
 
-class YOLOv3Loss(tf.keras.Model):
-    
-    def __init__(self, input_shape, class_num = None, ignore_thresh = .5):
-        
-        super(YOLOv3Loss,self).__init__();
-        self.input_shape_ = input_shape[:2];
-        self.num_layers = YOLOv3_anchors.shape[0] // 3;
-        # which anchor ratios are used for each layer of output
-        self.ignore_thresh = ignore_thresh;
-        anchor_mask = [[6,7,8],[3,4,5],[0,1,2]] if self.num_layers == 3 else [[3,4,5],[0,1,2]];
-        self.anchors_tensors = [tf.convert_to_tensor(YOLOv3_anchors[anchor_mask[l]], dtype = tf.float32) for l in range(self.num_layers)];
-        self.output_parsers = [
-            OutputParser(
-                {
-                    0: (self.input_shape_[0] // 32, self.input_shape_[1] // 32, self.anchors_tensors[l].shape[0], 5 + class_num),
-                    1: (self.input_shape_[0] // 16, self.input_shape_[1] // 16, self.anchors_tensors[l].shape[0], 5 + class_num),
-                    2: (self.input_shape_[0] // 8, self.input_shape_[1] // 8, self.anchors_tensors[l].shape[0], 5 + class_num)
-                }[l],
-                self.input_shape_,
-                self.anchors_tensors[l],
-                True
-            ) for l in range(self.num_layers)];
+def Loss(img_shape, anchors = YOLOv3_anchors, class_num = None, ignore_thresh = .5):
 
-    @tf.function
-    def call(self, outputs, labels):
-
-        # outputs is a tuple
-        # outputs.shape[layer] = batch x h x w x anchor_num x (1(delta x) + 1(delta y) + 1(width scale) + 1(height scale) + 1(object mask) + class_num(class probability))
-        # labels is a tuple
-        # labels.shape[layer] = batch x h x w x anchor_num x (1(proportional x) + 1 (proportional y) + 1(proportional width) + 1(proportional height) + 1(object mask) + class_num(class probability))
-        # NOTE: the info carried by the output and the label is different.
-        assert type(outputs) is tuple;
-        assert len(outputs) == self.num_layers;
-        # grid size of all layers
-        grid_shapes = [tf.shape(outputs[l])[1:3] for l in range(self.num_layers)];
-        # get batch size
-        batch_size = tf.shape(outputs[0])[0];
-        batch_size_float = tf.cast(batch_size, dtype = tf.float32);
-        loss = 0;
-        for l in range(self.num_layers):
-            # objectness: object_mask.shape = (batch,h,w,anchor_num,1)
-            object_mask = labels[l][..., 4:5];
-            object_mask_bool = tf.cast(object_mask, dtype = tf.bool);
-            # 1) ignore masks
-            # class type: true_class_probs.shape = (batch,h,w,anchor_num,class_num)
-            true_class_probs = labels[l][...,5:];
-            grid, pred_xy, pred_wh = self.output_parsers[l](outputs[l]);
-            # box proportional coordinates: pred_box.shape = (batch,h,w,anchor_num,4)
-            pred_box = tf.concat([pred_xy, pred_wh], axis = -1);
-            # boolean_mask doesnt support batch, so have to iterate over each of batch
-            ignore_masks = tf.TensorArray(tf.float32,batch_size);
-            for b in range(batch_size):
-                # true boxes proportional coordinates of this layer and current batch
-                true_box = tf.boolean_mask(labels[l][b,...,0:4], object_mask_bool[b,...,0]);
-                # iou.shape = (h,w,anchor_num,true_box_num)
-                iou = self.box_iou(pred_box[b], true_box);
-                # select a true box having the maximum iou for each anchor box: best_iou.shape = (h,w,anchor_num)
-                best_iou = tf.math.reduce_max(iou, axis = -1);
-                # ignore anchor box with iou below given threshold
-                ignore_mask = tf.where(tf.less(best_iou,self.ignore_thresh),tf.ones_like(best_iou),tf.zeros_like(best_iou));
-                ignore_masks.write(b,ignore_mask);
-            ignore_masks = ignore_masks.stack();
-            # ignore_masks.shape = (batch, h, w, anchor_num, 1)
-            ignore_masks = tf.expand_dims(ignore_masks, axis = -1);
-            # 2) loss
-            # (delta x, delta y) = (proportional x, proportional y) * (feature map.width, feature map.height) - (priorbox upper left x,priorbox upper left y)
-            # true box's delta x, delta y: raw_true_xy.shape = (batch,h,w,anchor_num,2)
-            raw_true_xy = labels[l][...,:2] * tf.cast(tf.reverse(grid_shapes[l], axis = [0]), dtype = tf.float32) - grid;
-            # (width scale, height scale) = (proportional width, proportional height) * (image.width, image.height) / (anchor width, anchor height)
-            # true box's width scale,height scale: raw_true_wh.shape = (batch,h,w,anchor_num,2)
-            raw_true_wh = tf.math.log(labels[l][..., 2:4] * tf.cast(tf.reverse(self.input_shape_, axis = [0]),dtype = tf.float32) / self.anchors_tensors[l]);
-            # filter out none object anchor boxes
-            raw_true_wh = tf.where(tf.concat([object_mask_bool,object_mask_bool], axis = -1), raw_true_wh, tf.zeros_like(raw_true_wh));
-            # 2 - proportional area = 2 - proportional width * proportional height
-            # box area is larger, loss is smaller
-            box_loss_scale = 2 - labels[l][...,2:3] * labels[l][...,3:4];
-            # xy_loss = -raw_true_xy * log(sigmoid(raw_xy)) - (1-raw_true_xy) * log(1 - sigmoid(raw_xy))
-            xy_loss = object_mask * box_loss_scale * tf.keras.losses.BinaryCrossentropy(from_logits = True)(raw_true_xy, outputs[l][...,0:2]);
-            # wh_loss = (raw_true_wh - raw_wh)^2
-            wh_loss = object_mask * box_loss_scale * 0.5 * tf.math.square(raw_true_wh - outputs[l][...,2:4]);
-            # confidence_loss = true_mask*(-true_mask*log(sigmoid(raw_mask))-(1-true_mask)*log(1-sigmoid(raw_mask))) + 
-            # (1-true_mask)*(-true_mask*log(sigmoid(raw_mask))-(1-true_mask)*log(1-sigmoid(raw_mask)))*ignore_mask
-            confidence_loss = object_mask * tf.keras.losses.BinaryCrossentropy(from_logits = True)(object_mask, outputs[l][...,4:5]) + \
-                (1 - object_mask) * tf.keras.losses.BinaryCrossentropy(from_logits = True)(object_mask, outputs[l][...,4:5]) * ignore_masks;
-            class_loss = object_mask * tf.keras.losses.BinaryCrossentropy(from_logits = True)(true_class_probs, outputs[l][...,5:]);
-            
-            xy_loss = tf.math.reduce_sum(xy_loss) / batch_size_float;
-            wh_loss = tf.math.reduce_sum(wh_loss) / batch_size_float;
-            confidence_loss = tf.math.reduce_sum(confidence_loss) / batch_size_float;
-            class_loss = tf.math.reduce_sum(class_loss) / batch_size_float;
-            loss += xy_loss + wh_loss + confidence_loss + class_loss;
-
-        return loss;
-
-    @tf.function
-    def box_iou(self, b1, b2):
-        
-        # calculate ious of given boxes' proportional coordinates
-        #assert len(tf.shape(b1)) == 4 and tf.shape(b1)[-1] == 4;
-        #assert len(tf.shape(b2)) == 2 and tf.shape(b2)[-1] == 4;
-        # b1.shape = (h,w,anchor_num,1,4)
-        b1 = tf.expand_dims(b1, axis = -2);
-        b1_xy = b1[...,:2];
-        b1_wh = b1[...,2:4];
-        b1_wh_half = b1_wh / 2.;
-        b1_mins = b1_xy - b1_wh_half; #(left, top).shape = (h,w,anchor_num,1,2)
-        b1_maxes = b1_xy + b1_wh_half; #(right, bottom).shape = (h,w,anchor_num,1,2)
-        # b2.shape = (1,true_box_num,4)
-        b2 = tf.expand_dims(b2, axis = 0);
-        b2_xy = b2[...,:2];
-        b2_wh = b2[...,2:4];
-        b2_wh_half = b2_wh / 2.;
-        b2_mins = b2_xy - b2_wh_half; #(left, top).shape = (1,true_box_num,2)
-        b2_maxes = b2_xy + b2_wh_half; #(right, bottom).shape = (1,true_box_num,2)
-        # the following operations are done between each anchor box and each true box by broadcasting
-        # intersect_mins.shape = (h,w,anchor_num,true_box_num,2)
-        intersect_mins = tf.math.maximum(b1_mins, b2_mins);
-        # intersect_maxes.shape = (h,w,anchor_num,true_box_num,2)
-        intersect_maxes = tf.math.maximum(b1_maxes, b2_maxes);
-        intersect_wh = tf.math.maximum(intersect_maxes - intersect_mins, 0.); #(intersect w, intersect h).shape = (h,w,anchor_nu,true_box_num,2)
-        # intersect_area.shape = (h,w,anchor_num,true_box_num)
-        intersect_area = intersect_wh[...,0] * intersect_wh[...,1];
-        b1_area = b1_wh[...,0] * b1_wh[...,1];
-        b2_area = b2_wh[...,0] * b2_wh[...,1];
-        # iou between each anchor box and each true box
-        iou = intersect_area / (b1_area + b2_area - intersect_area);
-        # iou.shape = (h,w,anchor_num,true_box_num)
-        return iou;
+    # outputs is a tuple
+    # outputs.shape[layer] = batch x h x w x anchor_num x (1(delta x) + 1(delta y) + 1(width scale) + 1(height scale) + 1(object mask) + class_num(class probability))
+    # labels is a tuple
+    # labels.shape[layer] = batch x h x w x anchor_num x (1(proportional x) + 1 (proportional y) + 1(proportional width) + 1(proportional height) + 1(object mask) + class_num(class probability))
+    # NOTE: the info carried by the output and the label is different.
+    assert type(anchors) is np.ndarray;
+    tf.debugging.Assert(tf.equal(tf.shape(img_shape)[0], 3), [img_shape]);
+    # anchors.shape = (9,2)
+    tf.debugging.Assert(tf.math.logical_and(tf.equal(anchors.shape[0], 9), tf.equal(anchors.shape[1], 2)), [anchors]);
+    input_shapes = [
+        (img_shape[0] // 32, img_shape[1] // 32, 3, 5 + class_num),
+        (img_shape[0] // 16, img_shape[1] // 16, 3, 5 + class_num),
+        (img_shape[0] // 8, img_shape[1] // 8, 3, 5 + class_num)
+    ];
+    inputs = [tf.keras.Input(input_shape) for input_shape in input_shapes];
+    labels = [tf.keras.Input(input_shape) for input_shape in input_shapes];
+    losses = list();
+    for l in range(len(labels)):
+        # 1) ignore masks
+        anchors_of_this_layer = anchors[{0:[6,7,8],1:[3,4,5],2:[0,1,2]}[l]];
+        grid, pred_xy, pred_wh = OutputParser(input_shapes[l], img_shape, anchors_of_this_layer, True)(inputs[l]);
+        # box proportional coordinates: pred_box.shape = (batch,h,w,anchor_num,4)
+        pred_box = tf.keras.layers.Concatenate()([pred_xy, pred_wh]);
+        def ignore_mask(pred_box, label):
+            # true_box.shape = (labeled target num, 4)
+            true_box = tf.boolean_mask(label[..., 0:4], tf.cast(label[..., 4], dtype = tf.bool));
+            # calculate IOU
+            # pred_box.shape = (h, w, anchor_num, 1, 4)
+            pred_box = tf.expand_dims(pred_box, axis = -2);
+            pred_box_xy = pred_box[..., 0:2];
+            pred_box_wh = pred_box[..., 2:4];
+            pred_box_wh_half = pred_box_wh / 2.;
+            pred_box_mins = pred_box_xy - pred_box_wh_half;
+            pred_box_maxs = pred_box_mins + pred_box_wh;
+            # true_box.shape = (1, target num, 4)
+            true_box = tf.expand_dims(true_box, axis = 0);
+            true_box_xy = true_box[..., 0:2];
+            true_box_wh = true_box[..., 2:4];
+            true_box_wh_half = true_box_wh / 2.;
+            true_box_mins = true_box_xy - true_box_wh_half;
+            true_box_maxs = true_box_mins + true_box_wh;
+            # intersection.shape = (h, w, anchor_num, target_num, 2)
+            intersect_mins = tf.math.maximum(pred_box_mins, true_box_mins);
+            intersect_maxs = tf.math.minimum(pred_box_maxs, true_box_maxs);
+            intersect_wh = tf.math.maximum(intersect_maxs - intersect_mins, 0.);
+            intersect_area = intersect_wh[..., 0] * intersect_wh[..., 1];
+            pred_box_area = pred_box_wh[..., 0] * pred_box_wh[..., 1];
+            true_box_area = true_box_wh[..., 0] * true_box_wh[..., 1];
+            # iou.shape = (h, w, anchor_num, labeled target_num)
+            iou = intersect_area / (pred_box_area + true_box_area - intersect_area);
+            # IOU of detected target with the best overlapped labeled box
+            # best_iou.shape = (h, w, anchor_num)
+            best_iou = tf.math.reduce_max(iou, axis = -1);
+            # ignore_mask.shape = (h, w, anchor_num)
+            ignore_mask = tf.where(tf.less(best_iou, ignore_thresh), tf.ones_like(best_iou), tf.zeros_like(best_iou));
+            return ignore_mask;
+        # ignore_masks.shape = (b, h, w, anchor_num)
+        ignore_masks = tf.keras.layers.Lambda(lambda x: tf.map_fn(ignore_mask, (x[0], x[1])))([pred_box, labels[l]]);
+        # 2) loss
+        # raw_true_xy.shape = (b, h, w, anchor_num, 2)
+        raw_true_xy = tf.keras.layers.Lambda(lambda x, input_shape: x[0][..., 0:2] * tf.cast([input_shape[1], input_shape[0]], dtype = tf.float32) - x[1], arguments = {'input_shape': input_shapes[l]})([labels[l], grid]);
+        # raw_true_wh.shape = (b, h, w, anchor_snum, 2)
+        raw_true_wh = tf.keras.layers.Lambda(lambda x, img_shape, anchors: tf.math.log(x[..., 2:4] * tf.cast([img_shape[1], img_shape[0]], dtype = tf.float32) / tf.cast(anchors, dtype = tf.float32)), arguments = {'img_shape': img_shape, 'anchors': anchors_of_this_layer})(labels[l]);
+        raw_true_wh = tf.keras.layers.Lambda(lambda x: tf.where(tf.concat([x[0][..., 4:5], x[0][..., 4:5]], axis = -1), x[1], tf.zeros_like(x[1])))([labels[l], raw_true_wh]);
+        # box_loss_scale.shape = (b, h, w, anchor_num, 1)
+        box_loss_scale = tf.keras.layers.Lambda(lambda x: 2 - x[...,2:3] * x[...,3:4])(labels[l]);
+        # xy_loss.shape = (b, h, w, anchor_num, 2)
+        xy_loss = tf.keras.layers.Lambda(lambda x: x[0][..., 4:5] * x[1] * tf.keras.losses.BinaryCrossentryopy(from_logits = True)(x[2], x[3][..., 0:2]))([labels[l], box_loss_scale, raw_true_xy, inputs[l]]);
+        xy_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(tf.math.reduce_mean(x, 0)))(xy_loss);
+        # wh_loss.shape = (b, h, w, anchor_num, 2)
+        wh_loss = tf.keras.layers.Lambda(lambda x: x[0][..., 4:5] * x[1] * 0.5 * tf.math.square(x[2] - x[3][..., 2:4]))([labels[l], box_loss_scale, raw_true_wh, inputs[l]]);
+        wh_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(tf.math.reduce_mean(x, 0)))(wh_loss);
+        # confidence_loss.shape = (b, h, w, anchor_num, 1)
+        confidence_loss = tf.keras.layers.Lambda(
+            lambda x:
+                x[0][..., 4:5] * tf.keras.losses.BinaryCrossentropy(from_logits = True)(x[0][..., 4:5], x[1][..., 4:5]) +
+                (1 - x[0][..., 4:5]) * tf.keras.losses.BinaryCrossentropy(from_logits = True)(x[0][..., 4:5], x[1][..., 4:5]) * x[2]
+        )([labels[l], inputs[l], ignore_masks]);
+        confidence_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(tf.math.reduce_mean(x, 0)))(confidence_loss);
+        # class_loss.shape = ()
+        class_loss = tf.keras.layers.Lambda(
+            lambda x:
+                x[0][..., 4:5] * tf.keras.losses.BinaryCrossentropy(from_logits = True)(x[0][...,5:], x[1][...,5:])
+        )([labels[l], inputs[l]]);
+        class_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(tf.math.reduce_mean(x, 0)))(class_loss);
+        loss = tf.keras.layers.Add()([xy_loss, wh_loss, confidence_loss, class_loss]);
+        losses.append(loss);
+    loss = tf.keras.layers.Add()(losses);
+    return tf.keras.Model(inputs = inputs + labels, outputs = loss);
 
 if __name__ == "__main__":
     

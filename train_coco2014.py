@@ -4,7 +4,7 @@ import os;
 import numpy as np;
 import tensorflow as tf;
 import tensorflow_datasets as tfds;
-from YOLOv3 import YOLOv3, YOLOv3Loss;
+from YOLOv3 import YOLOv3, Loss;
 from preprocess import map_function;
 
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1';
@@ -15,7 +15,8 @@ batch_size = 8; # images of different sizes can't be stack into a batch
 def main():
 
     # yolov3 model
-    yolov3 = YOLOv3((416,416,3), 80);
+    yolov3 = YOLOv3((416,416,3,), 80);
+    yolov3loss = Loss((416,416,3,));
     yolov3_loss = YOLOv3Loss((416,416,3), 80);
     # load downloaded dataset
     trainset = tfds.load(name = "coco2014", split = tfds.Split.TRAIN, download = False);
@@ -33,7 +34,7 @@ def main():
     for images,labels1,labels2,labels3 in trainset:
         with tf.GradientTape() as tape:
             outputs = yolov3(images);
-            loss = yolov3_loss(outputs,(labels1, labels2, labels3));
+            loss = yolov3loss(list(outputs) + [labels1, labels2, labels3]);
         avg_loss.update_state(loss);
         print('Step #%d Loss: %.6f' % (optimizer.iterations, loss));
         # write log
