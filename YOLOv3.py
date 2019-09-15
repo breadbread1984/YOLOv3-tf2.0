@@ -5,8 +5,6 @@ import tensorflow as tf;
 
 # NOTE: using functional API can save a lot of gmem
 
-YOLOv3_anchors = np.array([[10,13],[16,30],[33,23],[30,61],[62,45],[59,119],[116,90],[156,198],[373,326]], dtype = np.int32);
-
 def ConvBlock(input_shape, filters, kernel_size, strides = (1,1), padding = None):
     # 3 layers in total
 
@@ -57,7 +55,7 @@ def Output(input_shape, input_filters, output_filters):
 
 def YOLOv3(input_shape, class_num):
     
-    anchor_num = YOLOv3_anchors.shape[0] // 3;
+    anchor_num = 3;
     inputs = tf.keras.Input(shape = input_shape);
     large,middle,small = Body(inputs.shape[1:])(inputs);
     # feature for detecting large scale objects
@@ -108,17 +106,17 @@ def OutputParser(input_shape, img_shape, anchors, calc_loss = False):
     else:
         return tf.keras.Model(inputs = feats, outputs = (box_xy, box_wh, box_confidence, box_class_probs));
 
-def Loss(img_shape, anchors = YOLOv3_anchors, class_num = None, ignore_thresh = .5):
+def Loss(img_shape, class_num = None, ignore_thresh = .5):
 
     # outputs is a tuple
     # outputs.shape[layer] = batch x h x w x anchor_num x (1(delta x) + 1(delta y) + 1(width scale) + 1(height scale) + 1(object mask) + class_num(class probability))
     # labels is a tuple
     # labels.shape[layer] = batch x h x w x anchor_num x (1(proportional x) + 1 (proportional y) + 1(proportional width) + 1(proportional height) + 1(object mask) + class_num(class probability))
     # NOTE: the info carried by the output and the label is different.
-    assert type(anchors) is np.ndarray;
     tf.debugging.Assert(tf.equal(tf.shape(img_shape)[0], 3), [img_shape]);
     # anchors.shape = (9,2)
     tf.debugging.Assert(tf.math.logical_and(tf.equal(anchors.shape[0], 9), tf.equal(anchors.shape[1], 2)), [anchors]);
+    anchors = np.array([[10, 13], [16, 30], [33, 23], [30, 61], [62, 45], [59, 119], [116, 90], [156, 198], [373, 326]], dtype = np.int32);
     input_shapes = [
         (img_shape[0] // 32, img_shape[1] // 32, 3, 5 + class_num),
         (img_shape[0] // 16, img_shape[1] // 16, 3, 5 + class_num),
