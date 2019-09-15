@@ -54,22 +54,25 @@ def Output(input_shape, input_filters, output_filters):
     return tf.keras.Model(inputs = inputs, outputs = (cb5,cb7));
 
 def YOLOv3(input_shape, class_num = 80):
-    
+
     anchor_num = 3;
     inputs = tf.keras.Input(shape = input_shape);
     large,middle,small = Body(inputs.shape[1:])(inputs);
     # feature for detecting large scale objects
     x1,y1 = Output(large.shape[1:], 512, anchor_num * (class_num + 5))(large);
+    y1 = tf.keras.layers.Reshape((input_shape[0] // 32, input_shape[1] // 32, 3, 5 + class_num))(y1);
     # feature for detecting middle scale objects
     cb1 = ConvBlock(x1.shape[1:], filters = 256, kernel_size = (1,1))(x1);
     us1 = tf.keras.layers.UpSampling2D(2)(cb1);
     cat1 = tf.keras.layers.Concatenate()([us1, middle]);
     x2,y2 = Output(cat1.shape[1:], 256, anchor_num * (class_num + 5))(cat1);
+    y2 = tf.keras.layers.Reshape((input_shape[0] // 16, input_shape[1] // 16, 3, 5 + class_num))(y2);
     # feature for detecting small scale objects
     cb2 = ConvBlock(x2.shape[1:], filters = 128, kernel_size = (1,1))(x2);
     us2 = tf.keras.layers.UpSampling2D(2)(cb2);
     cat2 = tf.keras.layers.Concatenate()([us2, small]);
     x3,y3 = Output(cat2.shape[1:], 128, anchor_num * (class_num + 5))(cat2);
+    y3 = tf.keras.layers.Reshape((input_shape[0] // 8, input_shape[1] // 8, 3, 5 + class_num))(y3);
     return tf.keras.Model(inputs = inputs, outputs = (y1,y2,y3));
 
 def OutputParser(input_shape, img_shape, anchors, calc_loss = False):
