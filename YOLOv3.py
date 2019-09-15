@@ -198,4 +198,4 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
 if __name__ == "__main__":
     
     yolov3 = YOLOv3((416,416,3), 80);
-    yolov3_loss = YOLOv3Loss((416,416,3), 80);
+    yolov3loss = Loss((416,416,3), 80);
