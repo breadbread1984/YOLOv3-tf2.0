@@ -33,8 +33,8 @@ def main():
     avg_loss = tf.keras.metrics.Mean(name = 'loss', dtype = tf.float32);
     for images,labels1,labels2,labels3 in trainset:
         with tf.GradientTape() as tape:
-            outputs = yolov3(images);
-            loss = yolov3loss(list(outputs) + [labels1, labels2, labels3]);
+            outputs1, outputs2, outputs3 = yolov3(images);
+            loss = yolov3loss([outputs1, outputs2, outputs3, labels1, labels2, labels3]);
         avg_loss.update_state(loss);
         print('Step #%d Loss: %.6f' % (optimizer.iterations, loss));
         # write log
