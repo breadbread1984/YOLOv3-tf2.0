@@ -84,8 +84,8 @@ def OutputParser(input_shape, img_shape, anchors, calc_loss = False):
     feats = tf.keras.Input(input_shape);
     # [x,y] = meshgrid(x,y) get the upper left positions of prior boxes
     # grid.shape = (grid h, grid w, 1, 2)
-    grid_y = tf.keras.layers.Lambda(lambda x: tf.tile(tf.reshape(tf.range(x.shape[1]), (-1, 1, 1, 1)), (1, x.shape[2], 1, 1)))(feats);
-    grid_x = tf.keras.layers.Lambda(lambda x: tf.tile(tf.reshape(tf.range(x.shape[2]), (1, -1, 1, 1)), (x.shape[1], 1, 1, 1)))(feats);
+    grid_y = tf.keras.layers.Lambda(lambda x: tf.tile(tf.reshape(tf.range(x.shape[1], dtype = tf.float32), (-1, 1, 1, 1)), (1, x.shape[2], 1, 1)))(feats);
+    grid_x = tf.keras.layers.Lambda(lambda x: tf.tile(tf.reshape(tf.range(x.shape[2], dtype = tf.float32), (1, -1, 1, 1)), (x.shape[1], 1, 1, 1)))(feats);
     grid = tf.keras.layers.Concatenate(axis = -1)([grid_x, grid_y]);
     # box center proportional position = (delta x, delta y) + (priorbox upper left x,priorbox upper left y) / (feature map.width, feature map.height)
     # box_xy.shape = (batch, grid h, grid w, anchor_num, 2)
@@ -97,7 +97,7 @@ def OutputParser(input_shape, img_shape, anchors, calc_loss = False):
     box_confidence = tf.keras.layers.Lambda(lambda x: tf.math.sigmoid(x[..., 4:5]))(feats);
     # class confidence
     box_class_probs = tf.keras.layers.Lambda(lambda x: tf.math.sigmoid(x[..., 5:]))(feats);
-    if calc_loss = True:
+    if calc_loss == True:
         return tf.keras.Model(inputs = feats, outputs = (grid, box_xy, box_wh));
     else:
         return tf.keras.Model(inputs = feats, outputs = (box_xy, box_wh, box_confidence, box_class_probs));
@@ -110,8 +110,6 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
     # labels.shape[layer] = batch x h x w x anchor_num x (1(proportional x) + 1 (proportional y) + 1(proportional width) + 1(proportional height) + 1(object mask) + class_num(class probability))
     # NOTE: the info carried by the output and the label is different.
     tf.debugging.Assert(tf.equal(tf.shape(img_shape)[0], 3), [img_shape]);
-    # anchors.shape = (9,2)
-    tf.debugging.Assert(tf.math.logical_and(tf.equal(anchors.shape[0], 9), tf.equal(anchors.shape[1], 2)), [anchors]);
     anchors = np.array([[10, 13], [16, 30], [33, 23], [30, 61], [62, 45], [59, 119], [116, 90], [156, 198], [373, 326]], dtype = np.int32);
     input_shapes = [
         (img_shape[0] // 32, img_shape[1] // 32, 3, 5 + class_num),
@@ -127,7 +125,9 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
         grid, pred_xy, pred_wh = OutputParser(input_shapes[l], img_shape, anchors_of_this_layer, True)(inputs[l]);
         # box proportional coordinates: pred_box.shape = (batch,h,w,anchor_num,4)
         pred_box = tf.keras.layers.Concatenate()([pred_xy, pred_wh]);
-        def ignore_mask(pred_box, label):
+        def ignore_mask(x):
+            pred_box = x[0];
+            label = x[1];
             # true_box.shape = (labeled target num, 4)
             true_box = tf.boolean_mask(label[..., 0:4], tf.cast(label[..., 4], dtype = tf.bool));
             # calculate IOU
@@ -161,7 +161,7 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
             ignore_mask = tf.where(tf.less(best_iou, ignore_thresh), tf.ones_like(best_iou), tf.zeros_like(best_iou));
             return ignore_mask;
         # ignore_masks.shape = (b, h, w, anchor_num)
-        ignore_masks = tf.keras.layers.Lambda(lambda x: tf.map_fn(ignore_mask, (x[0], x[1])))([pred_box, labels[l]]);
+        ignore_masks = tf.keras.layers.Lambda(lambda x: tf.map_fn(ignore_mask, x))((pred_box, labels[l]));
         # 2) loss
         # raw_true_xy.shape = (b, h, w, anchor_num, 2)
         raw_true_xy = tf.keras.layers.Lambda(lambda x, input_shape: x[0][..., 0:2] * tf.cast([input_shape[1], input_shape[0]], dtype = tf.float32) - x[1], arguments = {'input_shape': input_shapes[l]})([labels[l], grid]);
