@@ -53,7 +53,7 @@ def Output(input_shape, input_filters, output_filters):
     cb7 = ConvBlock(cb6.shape[1:], filters = output_filters, kernel_size = (1,1))(cb6);
     return tf.keras.Model(inputs = inputs, outputs = (cb5,cb7));
 
-def YOLOv3(input_shape, class_num):
+def YOLOv3(input_shape, class_num = 80):
     
     anchor_num = 3;
     inputs = tf.keras.Input(shape = input_shape);
@@ -89,7 +89,7 @@ def OutputParser(input_shape, img_shape, anchors, calc_loss = False):
     grid = tf.keras.layers.Concatenate(axis = -1)([grid_x, grid_y]);
     # box center proportional position = (delta x, delta y) + (priorbox upper left x,priorbox upper left y) / (feature map.width, feature map.height)
     # box_xy.shape = (batch, grid h, grid w, anchor_num, 2)
-    box_xy = tf.keras.layers.Lambda(lambda x: (tf.math.sigmoid(x[0][...,0:2]) + x[1]) / tf.cast([x[1].shape[2], x[1].shape[1]], dtype = tf.float32))([feats, grid]);
+    box_xy = tf.keras.layers.Lambda(lambda x: (tf.math.sigmoid(x[0][...,0:2]) + x[1]) / tf.cast([x[1].shape[1], x[1].shape[0]], dtype = tf.float32))([feats, grid]);
     # box proportional size = (width scale, height scale) * (anchor width, anchor height) / (image.width, image.height)
     # box_wh.shape = (batch, grid h, grid w, anchor_num, 2)
     box_wh = tf.keras.layers.Lambda(lambda x, anchors, img_shape: tf.math.exp(feats[...,2:4]) * anchors / tf.cast([img_shape[1], img_shape[0]], dtype = tf.float32), arguments = {'anchors': anchors, 'img_shape': img_shape})(feats);
@@ -98,15 +98,11 @@ def OutputParser(input_shape, img_shape, anchors, calc_loss = False):
     # class confidence
     box_class_probs = tf.keras.layers.Lambda(lambda x: tf.math.sigmoid(x[..., 5:]))(feats);
     if calc_loss = True:
-        # return
-        # 1) prior box upper left coordinates
-        # 2) box center proportional positions
-        # 3) box proportional sizes
         return tf.keras.Model(inputs = feats, outputs = (grid, box_xy, box_wh));
     else:
         return tf.keras.Model(inputs = feats, outputs = (box_xy, box_wh, box_confidence, box_class_probs));
 
-def Loss(img_shape, class_num = None, ignore_thresh = .5):
+def Loss(img_shape, class_num = 80, ignore_thresh = .5):
 
     # outputs is a tuple
     # outputs.shape[layer] = batch x h x w x anchor_num x (1(delta x) + 1(delta y) + 1(width scale) + 1(height scale) + 1(object mask) + class_num(class probability))
