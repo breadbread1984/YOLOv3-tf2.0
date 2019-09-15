@@ -161,7 +161,7 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
             ignore_mask = tf.where(tf.less(best_iou, ignore_thresh), tf.ones_like(best_iou), tf.zeros_like(best_iou));
             return ignore_mask;
         # ignore_masks.shape = (b, h, w, anchor_num)
-        ignore_masks = tf.keras.layers.Lambda(lambda x: tf.map_fn(ignore_mask, x))((pred_box, labels[l]));
+        ignore_masks = tf.keras.layers.Lambda(lambda x: tf.map_fn(ignore_mask, x, dtype = tf.float32))((pred_box, labels[l]));
         # 2) loss
         # raw_true_xy.shape = (b, h, w, anchor_num, 2)
         raw_true_xy = tf.keras.layers.Lambda(lambda x, input_shape: x[0][..., 0:2] * tf.cast([input_shape[1], input_shape[0]], dtype = tf.float32) - x[1], arguments = {'input_shape': input_shapes[l]})([labels[l], grid]);
