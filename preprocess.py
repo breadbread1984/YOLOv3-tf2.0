@@ -22,7 +22,7 @@ def map_function(feature):
 
     image,label1,label2,label3 = tf.py_function(map_function_impl,inp = [feature["image"], feature["objects"]["bbox"], feature["objects"]["label"]],Tout = [tf.float32,tf.float32,tf.float32,tf.float32]);
     
-    return image, label1,label2,label3;
+    return image, (label1,label2,label3);
 
 def map_function_impl(image, bbox, label):
 
