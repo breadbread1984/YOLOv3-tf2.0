@@ -124,8 +124,11 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
     losses = list();
     for l in range(3):
         # 1) ignore masks
+        input_shape_of_this_layer = input_shapes[l];
         anchors_of_this_layer = anchors[l];
-        grid, pred_xy, pred_wh = OutputParser(input_shapes[l], img_shape, anchors_of_this_layer, True)(inputs[l]);
+        input_of_this_layer = inputs[l];
+        label_of_this_layer = labels[l];
+        grid, pred_xy, pred_wh = OutputParser(input_shape_of_this_layer, img_shape, anchors_of_this_layer, True)(input_of_this_layer);
         # box proportional coordinates: pred_box.shape = (batch,h,w,anchor_num,4)
         pred_box = tf.keras.layers.Concatenate()([pred_xy, pred_wh]);
         def ignore_mask(x):
@@ -164,34 +167,34 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
             ignore_mask = tf.where(tf.less(best_iou, ignore_thresh), tf.ones_like(best_iou), tf.zeros_like(best_iou));
             return ignore_mask;
         # ignore_masks.shape = (b, h, w, anchor_num)
-        ignore_masks = tf.keras.layers.Lambda(lambda x: tf.map_fn(ignore_mask, x, dtype = tf.float32))((pred_box, labels[l]));
+        ignore_masks = tf.keras.layers.Lambda(lambda x: tf.map_fn(ignore_mask, x, dtype = tf.float32))((pred_box, label_of_this_layer));
         # 2) loss
         # raw_true_xy.shape = (b, h, w, anchor_num, 2)
-        raw_true_xy = tf.keras.layers.Lambda(lambda x, input_shape: x[0][..., 0:2] * tf.cast([input_shape[1], input_shape[0]], dtype = tf.float32) - x[1], arguments = {'input_shape': input_shapes[l]})([labels[l], grid]);
+        raw_true_xy = tf.keras.layers.Lambda(lambda x, input_shape: x[0][..., 0:2] * tf.cast([input_shape[1], input_shape[0]], dtype = tf.float32) - x[1], arguments = {'input_shape': input_shape_of_this_layer})([label_of_this_layer, grid]);
         # raw_true_wh.shape = (b, h, w, anchor_snum, 2)
-        raw_true_wh = tf.keras.layers.Lambda(lambda x, img_shape, anchors: tf.math.log(x[..., 2:4] * tf.cast([img_shape[1], img_shape[0]], dtype = tf.float32) / tf.cast(anchors, dtype = tf.float32)), arguments = {'img_shape': img_shape, 'anchors': anchors_of_this_layer})(labels[l]);
-        raw_true_wh = tf.keras.layers.Lambda(lambda x: tf.where(tf.cast(tf.concat([x[0][..., 4:5], x[0][..., 4:5]], axis = -1), dtype = tf.bool), x[1], tf.zeros_like(x[1])))([labels[l], raw_true_wh]);
+        raw_true_wh = tf.keras.layers.Lambda(lambda x, img_shape, anchors: tf.math.log(x[..., 2:4] * tf.cast([img_shape[1], img_shape[0]], dtype = tf.float32) / tf.cast(anchors, dtype = tf.float32)), arguments = {'img_shape': img_shape, 'anchors': anchors_of_this_layer})(label_of_this_layer);
+        raw_true_wh = tf.keras.layers.Lambda(lambda x: tf.where(tf.cast(tf.concat([x[0][..., 4:5], x[0][..., 4:5]], axis = -1), dtype = tf.bool), x[1], tf.zeros_like(x[1])))([label_of_this_layer, raw_true_wh]);
         # box_loss_scale.shape = (b, h, w, anchor_num, 1)
         # box area is larger, loss is smaller.
-        box_loss_scale = tf.keras.layers.Lambda(lambda x: 2 - x[...,2:3] * x[...,3:4])(labels[l]);
+        box_loss_scale = tf.keras.layers.Lambda(lambda x: 2 - x[...,2:3] * x[...,3:4])(label_of_this_layer);
         # xy_loss.shape = (b, h, w, anchor_num, 2)
-        xy_loss = tf.keras.layers.Lambda(lambda x: x[0][..., 4:5] * x[1] * tf.keras.losses.BinaryCrossentropy(from_logits = True)(x[2], x[3][..., 0:2]))([labels[l], box_loss_scale, raw_true_xy, inputs[l]]);
+        xy_loss = tf.keras.layers.Lambda(lambda x: x[0][..., 4:5] * x[1] * tf.keras.losses.BinaryCrossentropy(from_logits = True)(x[2], x[3][..., 0:2]))([label_of_this_layer, box_loss_scale, raw_true_xy, input_of_this_layer]);
         xy_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(tf.math.reduce_mean(x, 0)))(xy_loss);
         # wh_loss.shape = (b, h, w, anchor_num, 2)
-        wh_loss = tf.keras.layers.Lambda(lambda x: x[0][..., 4:5] * x[1] * 0.5 * tf.math.square(x[2] - x[3][..., 2:4]))([labels[l], box_loss_scale, raw_true_wh, inputs[l]]);
+        wh_loss = tf.keras.layers.Lambda(lambda x: x[0][..., 4:5] * x[1] * 0.5 * tf.math.square(x[2] - x[3][..., 2:4]))([label_of_this_layer, box_loss_scale, raw_true_wh, input_of_this_layer]);
         wh_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(tf.math.reduce_mean(x, 0)))(wh_loss);
         # confidence_loss.shape = (b, h, w, anchor_num, 1)
         confidence_loss = tf.keras.layers.Lambda(
             lambda x:
                 x[0][..., 4] * tf.keras.losses.BinaryCrossentropy(from_logits = True)(x[0][..., 4], x[1][..., 4]) +
                 (1 - x[0][..., 4]) * tf.keras.losses.BinaryCrossentropy(from_logits = True)(x[0][..., 4], x[1][..., 4]) * x[2]
-        )([labels[l], inputs[l], ignore_masks]);
+        )([label_of_this_layer, input_of_this_layer, ignore_masks]);
         confidence_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(tf.math.reduce_mean(x, 0)))(confidence_loss);
         # class_loss.shape = ()
         class_loss = tf.keras.layers.Lambda(
             lambda x:
                 x[0][..., 4:5] * tf.keras.losses.BinaryCrossentropy(from_logits = True)(x[0][...,5:], x[1][...,5:])
-        )([labels[l], inputs[l]]);
+        )([label_of_this_layer, input_of_this_layer]);
         class_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(tf.math.reduce_mean(x, 0)))(class_loss);
         loss = tf.keras.layers.Lambda(lambda x: tf.math.add_n(x))([xy_loss, wh_loss, confidence_loss, class_loss]);
         losses.append(loss);
@@ -201,9 +204,9 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
 if __name__ == "__main__":
  
     yolov3 = YOLOv3((416,416,3), 80);
-    #yolov3loss = Loss((416,416,3), 80);
+    yolov3loss = Loss((416,416,3), 80);
     yolov3.save('yolov3.h5');
-    #yolov3loss.save('yolov3loss.h5');
+    yolov3loss.save('yolov3loss.h5');
     '''
     inputs = tf.keras.Input((416,416,3));
     outputs = YOLOv3((416,416,3), 80)(inputs);
