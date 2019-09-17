@@ -16,7 +16,8 @@ def main():
 
     # yolov3 model
     yolov3 = YOLOv3((416,416,3,), 80);
-    yolov3.compile(optimizer = tf.keras.optimizers.Adam(1e-4), loss = lambda outputs, labels: Loss((416,416,3), 80)([*outputs, *labels]));
+    yolov3loss = Loss((416,416,3,), 80);
+    yolov3.compile(optimizer = tf.keras.optimizers.Adam(1e-4), loss = lambda outputs, labels: yolov3loss([*outputs, *labels]));
     # load downloaded dataset
     trainset = tfds.load(name = "coco2014", split = tfds.Split.TRAIN, download = False);
     trainset = trainset.map(map_function).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
