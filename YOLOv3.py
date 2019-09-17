@@ -83,7 +83,7 @@ def OutputParser(input_shape, img_shape, anchors, calc_loss = False):
     tf.debugging.Assert(tf.math.logical_and(tf.equal(tf.shape(input_shape)[0],4), tf.equal(input_shape[2], 3)), [input_shape]);
     tf.debugging.Assert(tf.equal(tf.shape(img_shape)[0],3), [img_shape]);
     # anchors.shape = (3,2)
-    tf.debugging.Assert(tf.math.logical_and(tf.equal(anchors.shape[0], 3), tf.equal(anchors.shape[1], 2)), [anchors]);
+    tf.debugging.Assert(tf.math.logical_and(tf.equal(tf.shape(anchors)[0], 3), tf.equal(tf.shape(anchors)[1], 2)), [anchors]);
     feats = tf.keras.Input(input_shape);
     # [x,y] = meshgrid(x,y) get the upper left positions of prior boxes
     # grid.shape = (grid h, grid w, 1, 2)
@@ -113,7 +113,7 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
     # labels.shape[layer] = batch x h x w x anchor_num x (1(proportional x) + 1 (proportional y) + 1(proportional width) + 1(proportional height) + 1(object mask) + class_num(class probability))
     # NOTE: the info carried by the output and the label is different.
     tf.debugging.Assert(tf.equal(tf.shape(img_shape)[0], 3), [img_shape]);
-    anchors = np.array([[10, 13], [16, 30], [33, 23], [30, 61], [62, 45], [59, 119], [116, 90], [156, 198], [373, 326]], dtype = np.int32);
+    anchors = {2: [[10, 13], [16, 30], [33, 23]], 1: [[30, 61], [62, 45], [59, 119]], 0: [[116, 90], [156, 198], [373, 326]]};
     input_shapes = [
         (img_shape[0] // 32, img_shape[1] // 32, 3, 5 + class_num),
         (img_shape[0] // 16, img_shape[1] // 16, 3, 5 + class_num),
@@ -124,7 +124,7 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
     losses = list();
     for l in range(len(labels)):
         # 1) ignore masks
-        anchors_of_this_layer = anchors[{0:[6,7,8],1:[3,4,5],2:[0,1,2]}[l]];
+        anchors_of_this_layer = anchors[l];
         grid, pred_xy, pred_wh = OutputParser(input_shapes[l], img_shape, anchors_of_this_layer, True)(inputs[l]);
         # box proportional coordinates: pred_box.shape = (batch,h,w,anchor_num,4)
         pred_box = tf.keras.layers.Concatenate()([pred_xy, pred_wh]);
