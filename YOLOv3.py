@@ -196,9 +196,19 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
         loss = tf.keras.layers.Lambda(lambda x: tf.math.add_n(x))([xy_loss, wh_loss, confidence_loss, class_loss]);
         losses.append(loss);
     loss = tf.keras.layers.Lambda(lambda x: tf.math.add_n(x))(losses);
-    return tf.keras.Model(inputs = inputs + labels, outputs = loss);
+    return tf.keras.Model(inputs = (*inputs, *labels), outputs = loss);
 
 if __name__ == "__main__":
-    
+ 
     yolov3 = YOLOv3((416,416,3), 80);
-    yolov3loss = Loss((416,416,3), 80);
+    #yolov3loss = Loss((416,416,3), 80);
+    yolov3.save('yolov3.h5');
+    #yolov3loss.save('yolov3loss.h5');
+    '''
+    inputs = tf.keras.Input((416,416,3));
+    outputs = YOLOv3((416,416,3), 80)(inputs);
+    labels = [tf.keras.Input((13,13,3,85)), tf.keras.Input((26,26,3,85)), tf.keras.Input((52,52,3,85))];
+    loss = Loss((416,416,3), 80)([*outputs, *labels]);
+    model = tf.keras.Model(inputs = (inputs, *labels), outputs = loss);
+    model.save('yolov3_train.h5');
+    '''
