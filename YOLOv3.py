@@ -122,7 +122,7 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
     inputs = [tf.keras.Input(input_shape) for input_shape in input_shapes];
     labels = [tf.keras.Input(input_shape) for input_shape in input_shapes];
     losses = list();
-    for l in range(len(labels)):
+    for l in range(3):
         # 1) ignore masks
         anchors_of_this_layer = anchors[l];
         grid, pred_xy, pred_wh = OutputParser(input_shapes[l], img_shape, anchors_of_this_layer, True)(inputs[l]);
