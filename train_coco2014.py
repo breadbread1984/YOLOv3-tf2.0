@@ -46,6 +46,7 @@ def main():
         # save model
         if tf.equal(optimizer.iterations % 10, 0):
             checkpoint.save(os.path.join('checkpoints','ckpt'));
+    yolov3.save('yolov3.h5');
 
 if __name__ == "__main__":
     
