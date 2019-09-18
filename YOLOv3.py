@@ -87,15 +87,15 @@ def OutputParser(input_shape, img_shape, anchors, calc_loss = False):
     feats = tf.keras.Input(input_shape);
     # [x,y] = meshgrid(x,y) get the upper left positions of prior boxes
     # grid.shape = (grid h, grid w, 1, 2)
-    grid_y = tf.keras.layers.Lambda(lambda x: tf.tile(tf.reshape(tf.range(x.shape[1], dtype = tf.float32), (-1, 1, 1, 1)), (1, x.shape[2], 1, 1)))(feats);
-    grid_x = tf.keras.layers.Lambda(lambda x: tf.tile(tf.reshape(tf.range(x.shape[2], dtype = tf.float32), (1, -1, 1, 1)), (x.shape[1], 1, 1, 1)))(feats);
+    grid_y = tf.keras.layers.Lambda(lambda x: tf.tile(tf.reshape(tf.range(tf.cast(tf.shape(x)[1], dtype = tf.float32), dtype = tf.float32), (-1, 1, 1, 1)), (1, tf.shape(x)[2], 1, 1)))(feats);
+    grid_x = tf.keras.layers.Lambda(lambda x: tf.tile(tf.reshape(tf.range(tf.cast(tf.shape(x)[2], dtype = tf.float32), dtype = tf.float32), (1, -1, 1, 1)), (tf.shape(x)[1], 1, 1, 1)))(feats);
     grid = tf.keras.layers.Concatenate(axis = -1)([grid_x, grid_y]);
     # box center proportional position = (delta x, delta y) + (priorbox upper left x,priorbox upper left y) / (feature map.width, feature map.height)
     # box_xy.shape = (batch, grid h, grid w, anchor_num, 2)
-    box_xy = tf.keras.layers.Lambda(lambda x: (tf.math.sigmoid(x[0][...,0:2]) + x[1]) / tf.cast([x[1].shape[1], x[1].shape[0]], dtype = tf.float32))([feats, grid]);
+    box_xy = tf.keras.layers.Lambda(lambda x: (tf.math.sigmoid(x[0][...,0:2]) + x[1]) / tf.cast([tf.shape(x[1])[1], tf.shape(x[1])[0]], dtype = tf.float32))([feats, grid]);
     # box proportional size = (width scale, height scale) * (anchor width, anchor height) / (image.width, image.height)
     # box_wh.shape = (batch, grid h, grid w, anchor_num, 2)
-    box_wh = tf.keras.layers.Lambda(lambda x, anchors, img_shape: tf.math.exp(feats[...,2:4]) * anchors / tf.cast([img_shape[1], img_shape[0]], dtype = tf.float32), arguments = {'anchors': anchors, 'img_shape': img_shape})(feats);
+    box_wh = tf.keras.layers.Lambda(lambda x, y, z: tf.math.exp(x[...,2:4]) * y / tf.cast([z[1], z[0]], dtype = tf.float32), arguments = {'y': anchors, 'z': img_shape})(feats);
     # confidence of being an object
     box_confidence = tf.keras.layers.Lambda(lambda x: tf.math.sigmoid(x[..., 4:5]))(feats);
     # class confidence
@@ -204,8 +204,10 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
 if __name__ == "__main__":
  
     yolov3 = YOLOv3((416,416,3), 80);
+    parser = OutputParser((13,13,3,85), (416,416,3), [[116, 90], [156, 198], [373, 326]], True);
     yolov3loss = Loss((416,416,3), 80);
     yolov3.save('yolov3.h5');
+    parser.save('parser.h5');
     yolov3loss.save('yolov3loss.h5');
     '''
     inputs = tf.keras.Input((416,416,3));
