@@ -170,9 +170,9 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
         ignore_masks = tf.keras.layers.Lambda(lambda x: tf.map_fn(ignore_mask, x, dtype = tf.float32))((pred_box, label_of_this_layer));
         # 2) loss
         # raw_true_xy.shape = (b, h, w, anchor_num, 2)
-        raw_true_xy = tf.keras.layers.Lambda(lambda x, input_shape: x[0][..., 0:2] * tf.cast([input_shape[1], input_shape[0]], dtype = tf.float32) - x[1], arguments = {'input_shape': input_shape_of_this_layer})([label_of_this_layer, grid]);
+        raw_true_xy = tf.keras.layers.Lambda(lambda x, y: x[0][..., 0:2] * tf.cast([y[1], y[0]], dtype = tf.float32) - x[1], arguments = {'y': input_shape_of_this_layer})([label_of_this_layer, grid]);
         # raw_true_wh.shape = (b, h, w, anchor_snum, 2)
-        raw_true_wh = tf.keras.layers.Lambda(lambda x, img_shape, anchors: tf.math.log(x[..., 2:4] * tf.cast([img_shape[1], img_shape[0]], dtype = tf.float32) / tf.cast(anchors, dtype = tf.float32)), arguments = {'img_shape': img_shape, 'anchors': anchors_of_this_layer})(label_of_this_layer);
+        raw_true_wh = tf.keras.layers.Lambda(lambda x, y, z: x[..., 2:4] * tf.cast([y[1], y[0]], dtype = tf.float32) / tf.cast(z, dtype = tf.float32), arguments = {'y': img_shape, 'z': anchors_of_this_layer})(label_of_this_layer);
         raw_true_wh = tf.keras.layers.Lambda(lambda x: tf.where(tf.cast(tf.concat([x[0][..., 4:5], x[0][..., 4:5]], axis = -1), dtype = tf.bool), x[1], tf.zeros_like(x[1])))([label_of_this_layer, raw_true_wh]);
         # box_loss_scale.shape = (b, h, w, anchor_num, 1)
         # box area is larger, loss is smaller.
