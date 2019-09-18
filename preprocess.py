@@ -21,6 +21,10 @@ YOLOv3_anchors = np.array([[10,13],[16,30],[33,23],[30,61],[62,45],[59,119],[116
 def map_function(feature):
 
     image,label1,label2,label3 = tf.py_function(map_function_impl,inp = [feature["image"], feature["objects"]["bbox"], feature["objects"]["label"]],Tout = [tf.float32,tf.float32,tf.float32,tf.float32]);
+    image = tf.reshape(image, (416,416,3));
+    label1 = tf.reshape(label1, (13,13,3,85));
+    label2 = tf.reshape(label2, (26,26,3,85));
+    label3 = tf.reshape(label3, (52,52,3,85));
     
     return image, (label1,label2,label3);
 
