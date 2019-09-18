@@ -15,7 +15,11 @@ make sure no errors occur during the execution.
 then train the model by executing the following command
 
 ```Bash
-python3 train_coco2014.py
+python3 train_eager.py
+```
+or
+```Bash
+python3 train_keras.py
 ```
 
 ### how to test
