@@ -128,6 +128,7 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
         anchors_of_this_layer = anchors[l];
         input_of_this_layer = inputs[l];
         label_of_this_layer = labels[l];
+        # get proportional xywh of boundings from YOLOv3 output
         grid, pred_xy, pred_wh = OutputParser(input_shape_of_this_layer, img_shape, anchors_of_this_layer, True)(input_of_this_layer);
         # box proportional coordinates: pred_box.shape = (batch,h,w,anchor_num,4)
         pred_box = tf.keras.layers.Concatenate()([pred_xy, pred_wh]);
@@ -169,20 +170,10 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
         # ignore_masks.shape = (b, h, w, anchor_num)
         ignore_masks = tf.keras.layers.Lambda(lambda x: tf.map_fn(ignore_mask, x, dtype = tf.float32))((pred_box, label_of_this_layer));
         # 2) loss
-        # raw_true_xy.shape = (b, h, w, anchor_num, 2)
-        raw_true_xy = tf.keras.layers.Lambda(lambda x, y: x[0][..., 0:2] * tf.cast([y[1], y[0]], dtype = tf.float32) - x[1], arguments = {'y': input_shape_of_this_layer})([label_of_this_layer, grid]);
-        # raw_true_wh.shape = (b, h, w, anchor_snum, 2)
-        raw_true_wh = tf.keras.layers.Lambda(lambda x, y, z: tf.math.log(x[..., 2:4] * tf.cast([y[1], y[0]], dtype = tf.float32) / tf.cast(z, dtype = tf.float32)), arguments = {'y': img_shape, 'z': anchors_of_this_layer})(label_of_this_layer);
-        raw_true_wh = tf.keras.layers.Lambda(lambda x: tf.where(tf.cast(tf.concat([x[0][..., 4:5], x[0][..., 4:5]], axis = -1), dtype = tf.bool), x[1], tf.zeros_like(x[1])))([label_of_this_layer, raw_true_wh]);
-        # box_loss_scale.shape = (b, h, w, anchor_num)
-        # box area is larger, loss is smaller.
-        box_loss_scale = tf.keras.layers.Lambda(lambda x: 2 - x[...,0] * x[...,1])(raw_true_wh);
-        # xy_loss.shape = ()
-        xy_loss = tf.keras.layers.Lambda(lambda x: tf.keras.losses.MSE(x[0], x[1][...,0:2]) * x[2])([raw_true_xy, input_of_this_layer, box_loss_scale]);
-        xy_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(tf.math.reduce_mean(x, 0)))(xy_loss);
-        # wh_loss.shape = ()
-        wh_loss = tf.keras.layers.Lambda(lambda x: tf.keras.losses.MSE(x[0], x[1][...,2:4]) * x[2])([raw_true_wh, input_of_this_layer, box_loss_scale]);
-        wh_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(tf.math.reduce_mean(x, 0)))(wh_loss);
+        # mean square error of bounding location in proportional coordinates
+        # pos_loss.shape = ()
+        pos_loss = tf.keras.layers.Lambda(lambda x: tf.keras.losses.MSE(x[0][..., 0:4], x[1]))([label_of_this_layer, pred_box]);
+        pos_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(tf.math.reduce_mean(x, 0)))(pos_loss);
         # confidence_loss.shape = ()
         # punish more to unobject areas.
         confidence_loss = tf.keras.layers.Lambda(
@@ -197,7 +188,7 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
                 x[0][..., 4:5] * tf.keras.losses.BinaryCrossentropy(from_logits = True)(x[0][...,5:], x[1][...,5:])
         )([label_of_this_layer, input_of_this_layer]);
         class_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(tf.math.reduce_mean(x, 0)))(class_loss);
-        loss = tf.keras.layers.Lambda(lambda x: tf.math.add_n(x))([xy_loss, wh_loss, confidence_loss, class_loss]);
+        loss = tf.keras.layers.Lambda(lambda x: tf.math.add_n(x))([pos_loss, confidence_loss, class_loss]);
         losses.append(loss);
     loss = tf.keras.layers.Lambda(lambda x: tf.math.add_n(x))(losses);
     return tf.keras.Model(inputs = (*inputs, *labels), outputs = loss);
@@ -205,16 +196,6 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
 if __name__ == "__main__":
  
     yolov3 = YOLOv3((416,416,3), 80);
-    parser = OutputParser((13,13,3,85), (416,416,3), [[116, 90], [156, 198], [373, 326]], True);
-    yolov3loss = Loss((416,416,3), 80);
+    loss = Loss((416,416,3), 80);
     yolov3.save('yolov3.h5');
-    parser.save('parser.h5');
-    yolov3loss.save('yolov3loss.h5');
-    '''
-    inputs = tf.keras.Input((416,416,3));
-    outputs = YOLOv3((416,416,3), 80)(inputs);
-    labels = [tf.keras.Input((13,13,3,85)), tf.keras.Input((26,26,3,85)), tf.keras.Input((52,52,3,85))];
-    loss = Loss((416,416,3), 80)([*outputs, *labels]);
-    model = tf.keras.Model(inputs = (inputs, *labels), outputs = loss);
-    model.save('yolov3_train.h5');
-    '''
+    loss.save('loss.h5');
