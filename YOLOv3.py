@@ -123,7 +123,6 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
     labels = [tf.keras.Input(input_shape) for input_shape in input_shapes];
     losses = list();
     for l in range(3):
-        # 1) ignore masks
         input_shape_of_this_layer = input_shapes[l];
         anchors_of_this_layer = anchors[l];
         input_of_this_layer = inputs[l];
@@ -132,62 +131,39 @@ def Loss(img_shape, class_num = 80, ignore_thresh = .5):
         grid, pred_xy, pred_wh = OutputParser(input_shape_of_this_layer, img_shape, anchors_of_this_layer, True)(input_of_this_layer);
         # box proportional coordinates: pred_box.shape = (batch,h,w,anchor_num,4)
         pred_box = tf.keras.layers.Concatenate()([pred_xy, pred_wh]);
-        def ignore_mask(x):
-            pred_box = x[0];
-            label = x[1];
-            # true_box.shape = (labeled target num, 4)
-            true_box = tf.boolean_mask(label[..., 0:4], tf.cast(label[..., 4], dtype = tf.bool));
-            # calculate IOU
-            # pred_box.shape = (h, w, anchor_num, 1, 4)
-            pred_box = tf.expand_dims(pred_box, axis = -2);
-            pred_box_xy = pred_box[..., 0:2];
-            pred_box_wh = pred_box[..., 2:4];
-            pred_box_wh_half = pred_box_wh / 2.;
-            pred_box_mins = pred_box_xy - pred_box_wh_half;
-            pred_box_maxs = pred_box_mins + pred_box_wh;
-            # true_box.shape = (1, target num, 4)
-            true_box = tf.expand_dims(true_box, axis = 0);
-            true_box_xy = true_box[..., 0:2];
-            true_box_wh = true_box[..., 2:4];
-            true_box_wh_half = true_box_wh / 2.;
-            true_box_mins = true_box_xy - true_box_wh_half;
-            true_box_maxs = true_box_mins + true_box_wh;
-            # intersection.shape = (h, w, anchor_num, target_num, 2)
-            intersect_mins = tf.math.maximum(pred_box_mins, true_box_mins);
-            intersect_maxs = tf.math.minimum(pred_box_maxs, true_box_maxs);
-            intersect_wh = tf.math.maximum(intersect_maxs - intersect_mins, 0.);
-            intersect_area = intersect_wh[..., 0] * intersect_wh[..., 1];
-            pred_box_area = pred_box_wh[..., 0] * pred_box_wh[..., 1];
-            true_box_area = true_box_wh[..., 0] * true_box_wh[..., 1];
-            # iou.shape = (h, w, anchor_num, labeled target_num)
-            iou = intersect_area / (pred_box_area + true_box_area - intersect_area);
-            # IOU of detected target with the best overlapped labeled box
-            # best_iou.shape = (h, w, anchor_num)
-            best_iou = tf.math.reduce_max(iou, axis = -1);
-            # ignore_mask.shape = (h, w, anchor_num)
-            ignore_mask = tf.where(tf.less(best_iou, ignore_thresh), tf.ones_like(best_iou), tf.zeros_like(best_iou));
-            return ignore_mask;
-        # ignore_masks.shape = (b, h, w, anchor_num)
-        ignore_masks = tf.keras.layers.Lambda(lambda x: tf.map_fn(ignore_mask, x, dtype = tf.float32))((pred_box, label_of_this_layer));
-        # 2) loss
+        # object_mask.shape = (b, h, w, anchor_num);
+        object_mask = tf.keras.layers.Lambda(lambda x: tf.cast(x[..., 4], dtype = tf.bool))(label_of_this_layer);
         # mean square error of bounding location in proportional coordinates
         # pos_loss.shape = ()
-        pos_loss = tf.keras.layers.Lambda(lambda x: tf.keras.losses.MSE(x[0][..., 0:4], x[1]))([label_of_this_layer, pred_box]);
-        pos_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(tf.math.reduce_mean(x, 0)))(pos_loss);
+        # only supervise boundings of positve examples.
+        pos_loss = tf.keras.layers.Lambda(lambda x:
+            tf.math.reduce_sum(tf.keras.losses.MSE(
+                tf.boolean_mask(x[0][..., 0:4], x[2]),
+                tf.boolean_mask(x[1], x[2])
+            ))
+        )([label_of_this_layer, pred_box, object_mask]);
         # confidence_loss.shape = ()
-        # punish more to unobject areas.
-        confidence_loss = tf.keras.layers.Lambda(
-            lambda x:
-                x[0][..., 4] * tf.keras.losses.BinaryCrossentropy(from_logits = True)(x[0][..., 4], x[1][..., 4]) +
-                100 * (1 - x[0][..., 4]) * tf.keras.losses.BinaryCrossentropy(from_logits = True)(x[0][..., 4], x[1][..., 4]) * x[2]
-        )([label_of_this_layer, input_of_this_layer, ignore_masks]);
-        confidence_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(tf.math.reduce_mean(x, 0)))(confidence_loss);
+        # punish more to unobject areas to avoid false alarms.
+        confidence_loss = tf.keras.layers.Lambda(lambda x:
+            # supervise positive examples with weight 1
+            tf.keras.losses.BinaryCrossentropy(from_logits = True)(
+                tf.boolean_mask(x[0][..., 4], x[2]),
+                tf.boolean_mask(x[1][..., 4], x[2])
+            ) +
+            # supervise negative examples with weight 100
+            100 * tf.keras.losses.BinaryCrossentropy(from_logits = True)(
+                tf.boolean_mask(x[0][..., 4], tf.math.logical_not(x[2])),
+                tf.boolean_mask(x[1][..., 4], tf.math.logical_not(x[2]))
+            ) 
+        )([label_of_this_layer, input_of_this_layer, object_mask]);
         # class_loss.shape = ()
-        class_loss = tf.keras.layers.Lambda(
-            lambda x:
-                x[0][..., 4:5] * tf.keras.losses.BinaryCrossentropy(from_logits = True)(x[0][...,5:], x[1][...,5:])
-        )([label_of_this_layer, input_of_this_layer]);
-        class_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(tf.math.reduce_mean(x, 0)))(class_loss);
+        # only supervise classes of positive examples.
+        class_loss = tf.keras.layers.Lambda(lambda x:
+            tf.keras.losses.BinaryCrossentropy(from_logits = True)(
+                tf.boolean_mask(x[0][...,5:], x[2]),
+                tf.boolean_mask(x[1][...,5:], x[2])
+            )
+        )([label_of_this_layer, input_of_this_layer, object_mask]);
         loss = tf.keras.layers.Lambda(lambda x: tf.math.add_n(x))([pos_loss, confidence_loss, class_loss]);
         losses.append(loss);
     loss = tf.keras.layers.Lambda(lambda x: tf.math.add_n(x))(losses);
