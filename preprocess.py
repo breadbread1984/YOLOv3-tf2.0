@@ -179,8 +179,8 @@ def bbox_to_tensor(bbox, label, input_shape = (416,416), anchors = YOLOv3_anchor
             pos = tf.where(tf.equal(anchor_mask,n));
             l = pos[0][0];
             k = pos[0][1];
-            i = int(valid_true_boxes[t,1] * y_true[l].shape[0]); # absolute center y = proportional y * grid_shape.height
-            j = int(valid_true_boxes[t,0] * y_true[l].shape[1]); # absolute center x = proportional x * grid_shape.width
+            i = int(tf.clip_by_value(valid_true_boxes[t,1] * y_true[l].shape[0], clip_value_min = 0, clip_value_max = y_true[l].shape[0] - 1)); # absolute center y = proportional y * grid_shape.height
+            j = int(tf.clip_by_value(valid_true_boxes[t,0] * y_true[l].shape[1], clip_value_min = 0, clip_value_max = y_true[l].shape[1] - 1)); # absolute center x = proportional x * grid_shape.width
             c = valid_label[t]; # class
             y_true[l][i,j,k,0:4] = valid_true_boxes[t,0:4]; # box proportional position (w,y,width,height)
             y_true[l][i,j,k,4] = 1; # object mask
