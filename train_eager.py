@@ -44,8 +44,9 @@ def main():
         grads = tape.gradient(loss, yolov3.trainable_variables);
         optimizer.apply_gradients(zip(grads, yolov3.trainable_variables));
         # save model
-        if tf.equal(optimizer.iterations % 10, 0):
+        if tf.equal(optimizer.iterations % 1000, 0):
             checkpoint.save(os.path.join('checkpoints','ckpt'));
+            yolov3.save('yolov3.h5');
     yolov3.save('yolov3.h5');
 
 if __name__ == "__main__":
