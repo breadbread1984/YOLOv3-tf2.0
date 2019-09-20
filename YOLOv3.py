@@ -146,12 +146,12 @@ def Loss(img_shape, class_num = 80):
         # punish more to unobject areas to avoid false alarms.
         confidence_loss = tf.keras.layers.Lambda(lambda x:
             # supervise positive examples with weight 1
-            tf.keras.losses.BinaryCrossentropy(from_logits = True)(
+            tf.keras.losses.BinaryCrossentropy(from_logits = False)(
                 tf.boolean_mask(x[0], x[2]),
                 tf.boolean_mask(x[1], x[2])
             ) +
             # supervise negative examples with weight 100
-            100 * tf.keras.losses.BinaryCrossentropy(from_logits = True)(
+            100 * tf.keras.losses.BinaryCrossentropy(from_logits = False)(
                 tf.boolean_mask(x[0], tf.math.logical_not(x[2])),
                 tf.boolean_mask(x[1], tf.math.logical_not(x[2]))
             ) 
@@ -159,7 +159,7 @@ def Loss(img_shape, class_num = 80):
         # class_loss.shape = ()
         # only supervise classes of positive examples.
         class_loss = tf.keras.layers.Lambda(lambda x:
-            tf.keras.losses.BinaryCrossentropy(from_logits = True)(
+            tf.keras.losses.BinaryCrossentropy(from_logits = False)(
                 tf.boolean_mask(x[0], x[2]),
                 tf.boolean_mask(x[1], x[2])
             )
