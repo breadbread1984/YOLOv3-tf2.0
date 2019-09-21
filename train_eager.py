@@ -35,7 +35,7 @@ def main():
             outputs = yolov3(images);
             loss = yolov3_loss([*outputs, *labels]);
         # never update model with nan loss
-        if tf.math.is_inf(loss) or tf.math.is_nan(loss):
+        if tf.math.is_inf(loss) or tf.math.is_nan(loss) or loss > 1e5:
             continue;
         avg_loss.update_state(loss);
         print('Step #%d Loss: %.6f' % (optimizer.iterations, loss));
