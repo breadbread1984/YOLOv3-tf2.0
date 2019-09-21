@@ -34,18 +34,27 @@ def main():
         with tf.GradientTape() as tape:
             outputs = yolov3(images);
             loss = yolov3_loss([*outputs, *labels]);
-        # never update model with nan loss
-        if tf.math.is_inf(loss) or tf.math.is_nan(loss) or loss > 1e5:
-            continue;
-        avg_loss.update_state(loss);
-        print('Step #%d Loss: %.6f' % (optimizer.iterations, loss));
+        # check whether the loss numberic is correct
+        try:
+            loss_check = tf.debugging.check_numerics(loss, 'loss is not correct! will not update mean loss.');
+            with tf.control_dependencies([loss_check]):
+                avg_loss.update_state(loss);
+                print('Step #%d Loss: %.6f' % (optimizer.iterations, loss));
+        except BaseException as e:
+            print(e.message);
         # write log
         if tf.equal(optimizer.iterations % 10, 0):
             with log.as_default():
                 tf.summary.scalar('loss',avg_loss.result(), step = optimizer.iterations);
             avg_loss.reset_states();
         grads = tape.gradient(loss, yolov3.trainable_variables);
-        optimizer.apply_gradients(zip(grads, yolov3.trainable_variables));
+        # check whether the grad numerics is correct
+        try:
+            grads_check = [tf.debugging.check_numerics(grad, 'grads are not correct! will not apply it to the model.') for grad in grads];
+            with tf.control_dependencies(grads_check):
+                optimizer.apply_gradients(zip(grads, yolov3.trainable_variables));
+        except BaseException as e:
+            print(e.message);
         # save model
         if tf.equal(optimizer.iterations % 1000, 0):
             checkpoint.save(os.path.join('checkpoints','ckpt'));
