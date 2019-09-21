@@ -10,8 +10,10 @@ batch_size = 8;
 def main():
     
     # yolov3 model
-    yolov3 = tf.keras.models.load_model('yolov3.h5', compile = False);
+    yolov3 = YOLOv3((416,416,3), 80);
+    yolov3.load_weights('yolov3.h5');
     yolov3_loss = Loss((416,416,3), 80);
+    print(yolov3_loss.trainable_variables);
     # load downloaded dataset
     testset = tfds.load(name = "coco2014", split = tfds.Split.TEST, download = False);
     testset = testset.map(map_function).repeat(100).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
@@ -19,7 +21,9 @@ def main():
     count = 0;
     for images,labels in testset:
         outputs = yolov3(images);
+        outputs_check = [tf.debugging.check_numerics(output, 'invalid output!') for output in outputs];
         loss = yolov3_loss([*outputs, *labels]);
+        loss_check = tf.debugging.check_numerics(loss, 'invalid loss!');
         avg_loss.update_state(loss);
         print('Step #%d Loss: %.6f' % (count, loss));
         if tf.equal(count % 10, 0):
