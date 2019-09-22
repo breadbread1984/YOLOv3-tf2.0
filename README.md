@@ -34,3 +34,9 @@ python3 test.py
 
 ### how to predict with the trained model
 
+detect objects in an image by executing the following command
+
+```bash
+python3 predictor.py <path/to/image>
+```
+
