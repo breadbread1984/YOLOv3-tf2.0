@@ -28,7 +28,7 @@ class Predictor(object):
         bottom_pad = self.input_shape[0] - resize_shape[0] - top_pad;
         left_pad = (self.input_shape[1] - resize_shape[1]) // 2;
         right_pad = self.input_shape[1] - resize_shape[1] - left_pad;
-        resize_images = tf.pad(resize_images,[top_pad,bottom_pad],[left_pad,right_pad],[0,0]], constant_values = 128);
+        resize_images = tf.pad(resize_images,[[0,0], [top_pad,bottom_pad], [left_pad,right_pad], [0,0]], constant_values = 128);
         deviation = tf.constant([left_pad / self.input_shape[1], top_pad / self.input_shape[0], 0, 0], dtype = tf.float32);
         scale = tf.constant([
             self.input_shape[1] / resize_images.shape[2], self.input_shape[0] / resize_images.shape[1],

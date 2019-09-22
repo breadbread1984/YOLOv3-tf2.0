@@ -37,6 +37,6 @@ python3 test.py
 detect objects in an image by executing the following command
 
 ```bash
-python3 predictor.py <path/to/image>
+python3 Predictor.py <path/to/image>
 ```
 
