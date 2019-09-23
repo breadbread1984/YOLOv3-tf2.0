@@ -36,14 +36,14 @@ class Predictor(object):
         ], dtype = tf.float32);
         images_data = tf.cast(resize_images, tf.float32) / 255.;
         outputs = self.yolov3(images_data);
-        whole_targets = tf.constant([0,6], dtype = tf.float32);
+        whole_targets = tf.zeros((0,6), dtype = tf.float32);
         for i in range(3):
             pred_xy, pred_wh, pred_box_confidence, pred_class = self.parsers[i](outputs[i]);
             pred_box = tf.keras.layers.Concatenate(axis = -1)([pred_xy, pred_wh]);
             # target_mask.shape = (h, w, anchor num)
             target_mask = tf.greater(pred_box_confidence, thres);
             # pred_box_confidence = (pred target num, 1)
-            pred_box_confidence = tf.boolean_mask(pred_box_confidencen, target_mask);
+            pred_box_confidence = tf.boolean_mask(pred_box_confidence, target_mask);
             pred_box_confidence = tf.expand_dims(pred_box_confidence, axis = -1);
             # pred_box.shape = (pred target num, 4)
             pred_box = tf.boolean_mask(pred_box, target_mask);
@@ -51,18 +51,18 @@ class Predictor(object):
             # pred_class.shape = (pred target num, 1)
             pred_class = tf.boolean_mask(pred_class, target_mask);
             pred_class = tf.math.argmax(pred_class, axis = -1);
-            pred_class = tf.expand_dims(pred_class, axis = -1);
+            pred_class = tf.cast(tf.expand_dims(pred_class, axis = -1), dtype = tf.float32);
             # targets,sgaoe = (pred target num, 6)
             targets = tf.keras.layers.Concatenate(axis = -1)([pred_box, pred_box_confidence, pred_class]);
             whole_targets = tf.keras.layers.Concatenate(axis = 0)([whole_targets, targets]);
         # nms
-        descend_idx = tf.argsort(whole_targets[..., 4], directions = 'DESCENDING');
+        descend_idx = tf.argsort(whole_targets[..., 4], direction = 'DESCENDING');
         i = 0;
         while i < descend_idx.shape[0]:
             idx = descend_idx[i];
             cur_upper_left = whole_targets[idx, 0:2] - whole_targets[idx, 2:4] / 2;
             cur_down_right = cur_upper_left + whole_targets[idx, 2:4];
-            wh = whole_target[idx, 2:4];
+            wh = whole_targets[idx, 2:4];
             area = wh[..., 0] * wh[..., 1];
             following_idx = descend_idx[i+1:];
             following_targets = tf.gather(whole_targets, following_idx);
@@ -77,8 +77,8 @@ class Predictor(object):
             intersect_area = intersect_wh[..., 0] * intersect_wh[..., 1];
             overlap = intersect_area / (area + following_area - intersect_area);
             indices = tf.where(tf.less(overlap, 0.5));
-            following_idx = tf.gather(following_idx, indices);
-            descend_idx = tf.concat([descend_idx[:i], following_idx], axis = 0);
+            following_idx = tf.gather_nd(following_idx, indices);
+            descend_idx = tf.concat([descend_idx[:i + 1], following_idx], axis = 0);
             i += 1;
         whole_targets = tf.gather(whole_targets, descend_idx);
         return whole_targets;
@@ -87,4 +87,7 @@ if __name__ == "__main__":
 
     assert tf.executing_eagerly() == True;
     predictor = Predictor();
+    img = cv2.imread('test/2868550851539324502.jpg');
+    assert img is not None;
+    predictor.predict(img);
 
