@@ -82,7 +82,10 @@ class Predictor(object):
             descend_idx = tf.concat([descend_idx[:i + 1], following_idx], axis = 0);
             i += 1;
         whole_targets = tf.gather(whole_targets, descend_idx);
-        return whole_targets;
+        upper_left = (whole_targets[..., 0:2] - whole_targets[..., 2:4] / 2)# * tf.constant([image.shape[1], image.shape[0]], dtype = tf.float32);
+        down_right = (upper_left + whole_targets[..., 2:4])# * tf.constant([image.shape[1], image.shape[0]], dtype = tf.float32);
+        boundings = tf.keras.layers.Concatenate(axis = -1)([upper_left, down_right, whole_targets[..., 4:]]);
+        return boundings;
 
 if __name__ == "__main__":
 
@@ -95,5 +98,9 @@ if __name__ == "__main__":
     if img is None:
         print("invalid image!");
         exit(1);
-    predictor.predict(img);
+    boundings = predictor.predict(img);
+    for bounding in boundings:
+        cv2.rectangle(img, tuple(bounding[0:2].numpy().astype('int32')), tuple(bounding[2:4].numpy().astype('int32')), (0,255,0),2);
+    cv2.imshow('people', img);
+    cv2.waitKey();
 
