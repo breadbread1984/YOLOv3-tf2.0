@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import sys;
+import numpy as np;
 import cv2;
 import tensorflow as tf;
 from YOLOv3 import YOLOv3, OutputParser;
@@ -82,8 +83,8 @@ class Predictor(object):
             descend_idx = tf.concat([descend_idx[:i + 1], following_idx], axis = 0);
             i += 1;
         whole_targets = tf.gather(whole_targets, descend_idx);
-        upper_left = (whole_targets[..., 0:2] - whole_targets[..., 2:4] / 2)# * tf.constant([image.shape[1], image.shape[0]], dtype = tf.float32);
-        down_right = (upper_left + whole_targets[..., 2:4])# * tf.constant([image.shape[1], image.shape[0]], dtype = tf.float32);
+        upper_left = (whole_targets[..., 0:2] - whole_targets[..., 2:4] / 2)
+        down_right = (upper_left + whole_targets[..., 2:4])
         boundings = tf.keras.layers.Concatenate(axis = -1)([upper_left, down_right, whole_targets[..., 4:]]);
         return boundings;
 
@@ -99,8 +100,14 @@ if __name__ == "__main__":
         print("invalid image!");
         exit(1);
     boundings = predictor.predict(img);
+    color_map = dict();
     for bounding in boundings:
-        cv2.rectangle(img, tuple(bounding[0:2].numpy().astype('int32')), tuple(bounding[2:4].numpy().astype('int32')), (0,255,0),2);
+        if bounding[5].numpy().astype('int32') in color_map:
+            clr = color_map[bounding[5].numpy().astype('int32')];
+        else:
+            color_map[bounding[5].numpy().astype('int32')] = tuple(np.random.randint(low=0, high=256,size=(3)).tolist());
+            clr = color_map[bounding[5].numpy().astype('int32')];
+        cv2.rectangle(img, tuple(bounding[0:2].numpy().astype('int32')), tuple(bounding[2:4].numpy().astype('int32')), clr, 2);
     cv2.imshow('people', img);
     cv2.waitKey();
 
