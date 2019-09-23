@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import sys;
 import cv2;
 import tensorflow as tf;
 from YOLOv3 import YOLOv3, OutputParser;
@@ -86,8 +87,13 @@ class Predictor(object):
 if __name__ == "__main__":
 
     assert tf.executing_eagerly() == True;
+    if len(sys.argv) != 2:
+        print("Usage: " + sys.argv[0] + " <image>");
+        exit(0);
     predictor = Predictor();
-    img = cv2.imread('test/2868550851539324502.jpg');
-    assert img is not None;
+    img = cv2.imread(sys.argv[1]);
+    if img is None:
+        print("invalid image!");
+        exit(1);
     predictor.predict(img);
 
