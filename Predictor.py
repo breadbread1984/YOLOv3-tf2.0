@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import numpy as np;
+import cv2;
 import tensorflow as tf;
 from YOLOv3 import YOLOv3, OutputParser;
 
@@ -55,7 +55,32 @@ class Predictor(object):
             # targets,sgaoe = (pred target num, 6)
             targets = tf.keras.layers.Concatenate(axis = -1)([pred_box, pred_box_confidence, pred_class]);
             whole_targets = tf.keras.layers.Concatenate(axis = 0)([whole_targets, targets]);
-
+        # nms
+        descend_idx = tf.argsort(whole_targets[..., 4], directions = 'DESCENDING');
+        i = 0;
+        while i < descend_idx.shape[0]:
+            idx = descend_idx[i];
+            cur_upper_left = whole_targets[idx, 0:2] - whole_targets[idx, 2:4] / 2;
+            cur_down_right = cur_upper_left + whole_targets[idx, 2:4];
+            wh = whole_target[idx, 2:4];
+            area = wh[..., 0] * wh[..., 1];
+            following_idx = descend_idx[i+1:];
+            following_targets = tf.gather(whole_targets, following_idx);
+            following_upper_left = following_targets[..., 0:2] - following_targets[..., 2:4] / 2;
+            following_down_right = following_upper_left + following_targets[..., 2:4];
+            following_wh = following_targets[..., 2:4];
+            following_area = following_wh[..., 0] * following_wh[..., 1];
+            max_upper_left = tf.math.maximum(cur_upper_left, following_upper_left);
+            min_down_right = tf.math.minimum(cur_down_right, following_down_right);
+            intersect_wh = min_down_right - max_upper_left;
+            intersect_wh = tf.where(tf.math.greater(intersect_wh, 0), intersect_wh, tf.zeros_like(intersect_wh));
+            intersect_area = intersect_wh[..., 0] * intersect_wh[..., 1];
+            overlap = intersect_area / (area + following_area - intersect_area);
+            indices = tf.where(tf.less(overlap, 0.5));
+            following_idx = tf.gather(following_idx, indices);
+            descend_idx = tf.concat([descend_idx[:i], following_idx], axis = 0);
+            i += 1;
+        whole_targets = tf.gather(whole_targets, descend_idx);
         return whole_targets;
 
 if __name__ == "__main__":
