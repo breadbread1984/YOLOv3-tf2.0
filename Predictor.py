@@ -21,7 +21,7 @@ class Predictor(object):
         ];
         self.parsers = [OutputParser(output_shapes[l], input_shape, self.anchors[l]) for l in range(3)];
 
-    def predict(self, image, thres = 0.5):
+    def predict(self, image, conf_thres = 0.5, nms_thres = 0.5):
 
         images = tf.expand_dims(image, axis = 0);
         resize_images = tf.image.resize(images, self.input_shape[:2], method = tf.image.ResizeMethod.BICUBIC, preserve_aspect_ratio = True);
@@ -43,13 +43,13 @@ class Predictor(object):
             pred_xy, pred_wh, pred_box_confidence, pred_class = self.parsers[i](outputs[i]);
             pred_box = tf.keras.layers.Concatenate(axis = -1)([pred_xy, pred_wh]);
             # target_mask.shape = (h, w, anchor num)
-            target_mask = tf.greater(pred_box_confidence, thres);
+            target_mask = tf.greater(pred_box_confidence, conf_thres);
             # pred_box_confidence = (pred target num, 1)
             pred_box_confidence = tf.boolean_mask(pred_box_confidence, target_mask);
             pred_box_confidence = tf.expand_dims(pred_box_confidence, axis = -1);
             # pred_box.shape = (pred target num, 4)
             pred_box = tf.boolean_mask(pred_box, target_mask);
-            pred_box = (pred_box - deviation) * scale * [image.shape[1], image.shape[0], image.shape[1], image.shape[0]];
+            pred_box = (pred_box) * scale * [image.shape[1], image.shape[0], image.shape[1], image.shape[0]];
             # pred_class.shape = (pred target num, 1)
             pred_class = tf.boolean_mask(pred_class, target_mask);
             pred_class = tf.math.argmax(pred_class, axis = -1);
@@ -78,7 +78,7 @@ class Predictor(object):
             intersect_wh = tf.where(tf.math.greater(intersect_wh, 0), intersect_wh, tf.zeros_like(intersect_wh));
             intersect_area = intersect_wh[..., 0] * intersect_wh[..., 1];
             overlap = intersect_area / (area + following_area - intersect_area);
-            indices = tf.where(tf.less(overlap, 0.5));
+            indices = tf.where(tf.less(overlap, nms_thres));
             following_idx = tf.gather_nd(following_idx, indices);
             descend_idx = tf.concat([descend_idx[:i + 1], following_idx], axis = 0);
             i += 1;
