@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import sys;
+from os.path import exists;
 import numpy as np;
 import cv2;
 import tensorflow as tf;
@@ -10,16 +11,23 @@ class Predictor(object):
 
     anchors = {2: [[10, 13], [16, 30], [33, 23]], 1: [[30, 61], [62, 45], [59, 119]], 0: [[116, 90], [156, 198], [373, 326]]};
 
-    def __init__(self, input_shape = (416,416,3), class_num = 80):
+    def __init__(self, input_shape = (416,416,3), class_num = 80, yolov3 = None):
 
-        self.input_shape = input_shape;
-        self.yolov3 = tf.keras.models.load_model('yolov3.h5', compile = False);
-        output_shapes = [
-            (input_shape[0] // 32, input_shape[1] // 32, 3, 5 + class_num),
-            (input_shape[0] // 16, input_shape[1] // 16, 3, 5 + class_num),
-            (input_shape[0] // 8, input_shape[1] // 8, 3, 5 + class_num)
-        ];
-        self.parsers = [OutputParser(output_shapes[l], input_shape, self.anchors[l]) for l in range(3)];
+        if yolov3 is None:
+            self.input_shape = input_shape;
+            if exists("yolov3.h5"):
+                # restore from serialized file
+                self.yolov3 = tf.keras.models.load_model('yolov3.h5', compile = False);
+            else:
+                # restore from checkpoint
+                self.yolov3 = YOLOv3(input_shape, class_num);
+                optimizer = tf.keras.optimizers.Adam(1e-4);
+                checkpoint = tf.train.Checkpoint(model = self.yolov3, optimizer = optimizer, optimizer_step = optimizer.iterations);
+                checkpoint.restore(tf.train.latest_checkpoint('checkpoints'));
+        else:
+            self.input_shape = tuple(yolov3.input.shape[1:]);
+            self.yolov3 = yolov3;
+        self.parsers = [OutputParser(tuple(self.yolov3.outputs[l].shape[1:]), self.input_shape, self.anchors[l]) for l in range(3)];
 
     def predict(self, image, conf_thres = 0.5, nms_thres = 0.5):
 
