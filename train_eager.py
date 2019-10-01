@@ -46,7 +46,6 @@ def main():
                 print('Step #%d Loss: %.6f' % (optimizer.iterations, loss));
         except BaseException as e:
             print(e.message);
-            continue;
         # write log
         if tf.equal(optimizer.iterations % 10, 0):
             with log.as_default():
@@ -60,7 +59,6 @@ def main():
                 optimizer.apply_gradients(zip(grads, yolov3.trainable_variables));
         except BaseException as e:
             print(e.message);
-            continue;
         # save model
         if tf.equal(optimizer.iterations % 1000, 0):
             # save checkpoint every 1000 steps
