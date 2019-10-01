@@ -59,11 +59,13 @@ def main():
                 optimizer.apply_gradients(zip(grads, yolov3.trainable_variables));
         except tf.errors.OpError as e:
             continue;
-        # save model and eval on test set
+        # save model
         if tf.equal(optimizer.iterations % 1000, 0):
             # save checkpoint every 1000 steps
             checkpoint.save(os.path.join('checkpoints','ckpt'));
             yolov3.save('yolov3.h5');
+        # eval on testset
+        if tf.equal(optimizer.iterations % 100, 0):
             # evaluate evey 1000 steps
             features = next(testset_iter);
             img = features["image"].numpy().astype('uint8');
@@ -76,7 +78,7 @@ def main():
                 else:
                     color_map[bounding[5].numpy().astype('int32')] = tuple(np.random.randint(low=0, high=256,size=(3)).tolist());
                     clr = color_map[bounding[5].numpy().astype('int32')];
-                cv2.rectangle(img, tuple(bounding[0:2].numpy().astype('int32')), tuple(bounding[2:4].numpy().astype('int32')), clr, 2);
+                cv2.rectangle(img, tuple(bounding[0:2].numpy().astype('int32')), tuple(bounding[2:4].numpy().astype('int32')), clr, 5);
             img = tf.expand_dims(img, axis = 0);
             with log.as_default():
                 tf.summary.image('detect', img, step = optimizer.iterations);
