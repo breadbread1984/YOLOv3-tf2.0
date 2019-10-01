@@ -43,9 +43,10 @@ def main():
             loss_check = tf.debugging.check_numerics(loss, 'the loss is not correct! cancel train_loss update!');
             with tf.control_dependencies([loss_check]):
                 train_loss.update_state(loss);
-        except tf.errors.OpError as e:
+                print('Step #%d Loss: %.6f' % (optimizer.iterations, loss));
+        except BaseException as e:
+            print(e.message);
             continue;
-        print('Step #%d Loss: %.6f' % (optimizer.iterations, loss));
         # write log
         if tf.equal(optimizer.iterations % 10, 0):
             with log.as_default():
@@ -57,7 +58,8 @@ def main():
             grads_check = [tf.debugging.check_numerics(grad, 'the grad is not correct! cancel gradient apply!') for grad in grads];
             with tf.control_dependencies(grads_check):
                 optimizer.apply_gradients(zip(grads, yolov3.trainable_variables));
-        except tf.errors.OpError as e:
+        except BaseException as e:
+            print(e.message);
             continue;
         # save model
         if tf.equal(optimizer.iterations % 1000, 0):
