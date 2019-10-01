@@ -12,17 +12,6 @@ os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1';
 #os.environ['CUDA_VISIBLE_DEVICES'] = '';
 batch_size = 8; # images of different sizes can't be stack into a batch
 
-def safe_execution(values, func):
-    assert type(values) is list;
-    try:
-        values_check = [tf.debugging.check_numerics(value, 'the value is not currect! cancel func execution!') for value in values];
-        with tf.control_dependencies(values_check):
-            func(values);
-        return True;
-    except:
-        print('invalid numeric detected!');
-        return False;
-
 def main():
 
     # yolov3 model
@@ -50,7 +39,12 @@ def main():
             outputs = yolov3(images);
             loss = yolov3_loss([*outputs, *labels]);
         # check whether the loss numberic is correct
-        if False == safe_execution([loss], lambda x: train_loss.update_state(x[0])): continue;
+        try:
+            loss_check = tf.debugging.check_numerics(loss, 'the loss is not correct! cancel train_loss update!');
+            with tf.control_dependencies([loss_check]):
+                train_loss.update_state(loss);
+        except tf.errors.OpError as e:
+            continue;
         print('Step #%d Loss: %.6f' % (optimizer.iterations, loss));
         # write log
         if tf.equal(optimizer.iterations % 10, 0):
@@ -59,7 +53,12 @@ def main():
             train_loss.reset_states();
         grads = tape.gradient(loss, yolov3.trainable_variables);
         # check whether the grad numerics is correct
-        if False == safe_execution(grads, lambda x: optimizer.apply_gradients(zip(x, yolov3.trainable_variables))): continue;
+        try:
+            grads_check = [tf.debugging.check_numerics(grad, 'the grad is not correct! cancel gradient apply!') for grad in grads];
+            with tf.control_dependencies(grads_check):
+                optimizer.apply_gradients(zip(grads, yolov3.trainable_variables));
+        except tf.errors.OpError as e:
+            continue;
         # save model
         if tf.equal(optimizer.iterations % 1000, 0):
             # evaluate evey 1000 steps
@@ -67,7 +66,12 @@ def main():
                 images, labels = next(testset_iter);
                 outputs = yolov3(images);
                 loss = yolov3_loss([*outputs, * labels]);
-                if False == safe_execution([loss], lambda x: eval_loss.update_state(x[0])): continue;
+                try:
+                    loss_check = tf.debugging.check_numerics(loss, 'the loss is not correct! cancel eval_loss update!');
+                    with tf.control_dependencies([loss]):
+                        eval_loss.update_state(loss);
+                except tf.errors.OpError as e:
+                    continue;
             print('Step #%d Eval Loss: %.6f' % (optimizer.iterations, eval_loss.result()));
             with log.as_default():
                 tf.summary.scalar('eval loss', eval_loss.result(), step = optimizer.iterations);
