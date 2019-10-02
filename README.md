@@ -24,14 +24,6 @@ python3 train_keras.py
 
 currently, only eager training is workable. I am still debugging keras's fit training.
 
-### how to test
-
-after training, you can find yolov3.h5 under current directory. test the model with following command
-
-```bash
-python3 test.py
-```
-
 ### how to predict with the trained model
 
 detect objects in an image by executing the following command
