@@ -41,8 +41,8 @@ class Predictor(object):
         resize_images = tf.pad(resize_images,[[0,0], [top_pad,bottom_pad], [left_pad,right_pad], [0,0]], constant_values = 128);
         deviation = tf.constant([left_pad / self.input_shape[1], top_pad / self.input_shape[0], 0, 0], dtype = tf.float32);
         scale = tf.constant([
-            self.input_shape[1] / resize_images.shape[2], self.input_shape[0] / resize_images.shape[1],
-            self.input_shape[1] / resize_images.shape[2], self.input_shape[0] / resize_images.shape[1]
+            self.input_shape[1] / resize_shape[1], self.input_shape[0] / resize_shape[0],
+            self.input_shape[1] / resize_shape[1], self.input_shape[0] / resize_shape[0]
         ], dtype = tf.float32);
         images_data = tf.cast(resize_images, tf.float32) / 255.;
         outputs = self.yolov3(images_data);
@@ -57,7 +57,7 @@ class Predictor(object):
             pred_box_confidence = tf.expand_dims(pred_box_confidence, axis = -1);
             # pred_box.shape = (pred target num, 4)
             pred_box = tf.boolean_mask(pred_box, target_mask);
-            pred_box = (pred_box) * scale * [image.shape[1], image.shape[0], image.shape[1], image.shape[0]];
+            pred_box = (pred_box - deviation) * scale * [image.shape[1], image.shape[0], image.shape[1], image.shape[0]];
             # pred_class.shape = (pred target num, 1)
             pred_class = tf.boolean_mask(pred_class, target_mask);
             pred_class = tf.math.argmax(pred_class, axis = -1);
