@@ -11,9 +11,10 @@ def main():
 
     testset = tfds.load(name = "coco2014", split = tfds.Split.TEST, download = False);
     testset = testset.repeat(1);
+    predictor = Predictor();
     for features in testset:
         img = features["image"].numpy().astype("uint8");
-        predictor = predictor.predict(img);
+        boundings = predictor.predict(img);
         color_map = dict();
         for bounding in boundings:
             if bounding[5].numpy().astype('int32') in color_map:
