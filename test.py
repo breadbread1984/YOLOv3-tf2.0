@@ -15,17 +15,18 @@ def main():
     for features in testset:
         img = features["image"].numpy().astype("uint8");
         boundings = predictor.predict(img);
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR);
         color_map = dict();
         for bounding in boundings:
             if bounding[5].numpy().astype('int32') in color_map:
                 clr = color_map[bounding[5].numpy().astype('int32')];
             else:
-                color_map[bounding[5].numpy().astype('int32')] = tuple(np.random.randint(low = 0, hight = 256, size=(3,)).to_list());
+                color_map[bounding[5].numpy().astype('int32')] = tuple(np.random.randint(low = 0, high = 256, size=(3,)).tolist());
                 clr = color_map[bounding[5].numpy().astype('int32')];
             cv2.rectangle(img, tuple(bounding[0:2].numpy().astype('int32')), tuple(bounding[2:4].numpy().astype('int32')), clr, 5);
-            cv2.imshow('detection result', img);
-            k = cv2.waitKey();
-            if k == 'q': break;
+        cv2.imshow('detection result', img);
+        k = cv2.waitKey();
+        if k == 'q': break;
 
 if __name__ == "__main__":
 
