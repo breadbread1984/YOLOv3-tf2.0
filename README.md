@@ -32,3 +32,10 @@ detect objects in an image by executing the following command
 python3 Predictor.py <path/to/image>
 ```
 
+### how to test on COCO 2014 test set
+
+run the test by executing
+
+```bash
+python3 test.py
+```

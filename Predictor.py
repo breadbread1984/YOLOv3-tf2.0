@@ -113,7 +113,7 @@ if __name__ == "__main__":
         if bounding[5].numpy().astype('int32') in color_map:
             clr = color_map[bounding[5].numpy().astype('int32')];
         else:
-            color_map[bounding[5].numpy().astype('int32')] = tuple(np.random.randint(low=0, high=256,size=(3)).tolist());
+            color_map[bounding[5].numpy().astype('int32')] = tuple(np.random.randint(low=0, high=256,size=(3,)).tolist());
             clr = color_map[bounding[5].numpy().astype('int32')];
         cv2.rectangle(img, tuple(bounding[0:2].numpy().astype('int32')), tuple(bounding[2:4].numpy().astype('int32')), clr, 2);
     cv2.imshow('people', img);
