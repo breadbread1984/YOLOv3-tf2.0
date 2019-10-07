@@ -64,7 +64,7 @@ def main():
         except BaseException as e:
             print(e.message);
         # save model
-        if tf.equal(optimizer.iterations % 5000, 0):
+        if tf.equal(optimizer.iterations % 2000, 0):
             # save checkpoint every 1000 steps
             checkpoint.save(os.path.join('checkpoints','ckpt'));
             yolov3.save('yolov3.h5');
