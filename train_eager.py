@@ -76,12 +76,8 @@ def main():
                 images, labels = next(validationset_iter);
                 outputs = yolov3(images);
                 loss = yolov3_loss([*outputs, *labels]);
-                try:
-                    loss_check = tf.debugging.check_numerics(loss, 'the loss is not correct! cancel validation_loss update!');
-                    with tf.control_dependencies([loss_check]):
-                        validation_loss.update_state(loss);
-                except BaseException as e:
-                    print(e.message);
+                # NOTE: validation loss is not important, numeric validity is not checked
+                validation_loss.update_state(loss);
             with log.as_default():
                 tf.summary.scalar('validation loss', validation_loss.result(), step = optimizer.iterations);
             validation_loss.reset_states();
