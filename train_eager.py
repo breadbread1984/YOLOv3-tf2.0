@@ -83,7 +83,7 @@ def main():
                 except BaseException as e:
                     print(e.message);
             with log.as_default():
-                tf.summary_scalar('validation loss', validation_loss.result(), step = optimizer.iterations);
+                tf.summary.scalar('validation loss', validation_loss.result(), step = optimizer.iterations);
             validation_loss.reset_states();
             # evaluate evey 1000 steps
             print("testing on test set...");
