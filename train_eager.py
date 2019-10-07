@@ -22,6 +22,8 @@ def main():
     # load downloaded dataset
     trainset = tfds.load(name = "coco2014", split = tfds.Split.TRAIN, download = False);
     trainset = trainset.map(map_function).repeat(100).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
+    validationset = tfds.load(name = "coco2014", split = tfds.Split.VALIDATION, download = False);
+    validationset_iter = validationset.map(map_function).repeat(100).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE).__iter__();
     testset = tfds.load(name = "coco2014", split = tfds.Split.TEST, download = False); # without label
     testset = testset.repeat(100).prefetch(tf.data.experimental.AUTOTUNE);
     testset_iter = testset.__iter__();
@@ -35,6 +37,7 @@ def main():
     # train model
     print("training...");
     train_loss = tf.keras.metrics.Mean(name = 'train loss', dtype = tf.float32);
+    validation_loss = tf.keras.metrics.Mean(name = 'validation loss', dtype = tf.float32);
     for images, labels in trainset:
         with tf.GradientTape() as tape:
             outputs = yolov3(images);
@@ -61,13 +64,29 @@ def main():
         except BaseException as e:
             print(e.message);
         # save model
-        if tf.equal(optimizer.iterations % 1000, 0):
+        if tf.equal(optimizer.iterations % 5000, 0):
             # save checkpoint every 1000 steps
             checkpoint.save(os.path.join('checkpoints','ckpt'));
             yolov3.save('yolov3.h5');
         # eval on testset
         if tf.equal(optimizer.iterations % 100, 0):
+            # validate with latest model
+            print("validating on validation set...");
+            for i in range(10):
+                images, labels = next(validationset_iter);
+                outputs = yolov3(images);
+                loss = yolov3_loss([*outputs, *labels]);
+                try:
+                    loss_check = tf.debugging.check_numerics(loss, 'the loss is not correct! cancel validation_loss update!');
+                    with tf.control_dependencies([loss_check]):
+                        validation_loss.update_state(loss);
+                except BaseException as e:
+                    print(e.message);
+            with log.as_default():
+                tf.summary_scalar('validation loss', validation_loss.result(), step = optimizer.iterations);
+            validation_loss.reset_states();
             # evaluate evey 1000 steps
+            print("testing on test set...");
             features = next(testset_iter);
             img = features["image"].numpy().astype('uint8');
             predictor = Predictor(yolov3 = yolov3);
