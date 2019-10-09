@@ -35,12 +35,12 @@ python3 Predictor.py <path/to/image>
 compose label file in the following format.
 
 ><path/to/image1> <target num>
-<x> <y> <width> <height> <label>
-<x> <y> <width> <height> <label>
-...
-<x> <y> <width> <height> <label>
-<path/to/image2> <target num>
-...
+><x> <y> <width> <height> <label>
+><x> <y> <width> <height> <label>
+>...
+><x> <y> <width> <height> <label>
+><path/to/image2> <target num>
+>...
 
 generate tfrecord file by executing the following command.
 
