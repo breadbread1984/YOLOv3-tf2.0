@@ -22,8 +22,6 @@ or
 python3 train_keras.py
 ```
 
-currently, only eager training is workable. I am still debugging keras's fit training.
-
 ### how to predict with the trained model
 
 detect objects in an image by executing the following command

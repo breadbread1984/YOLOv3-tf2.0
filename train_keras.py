@@ -23,9 +23,9 @@ def main():
     # load downloaded dataset
     trainset = tfds.load(name = "coco2014", split = tfds.Split.TRAIN, download = False);
     trainset = trainset.map(map_function).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
-    testset = tfds.load(name = "coco2014", split = tfds.Split.TEST, download = False);
-    testset = testset.map(map_function).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
-    yolov3.fit(trainset, epochs = 100, validation_data = testset);
+    validationset = tfds.load(name = "coco2014", split = tfds.Split.VALIDATION, download = False);
+    validationset = validationset.map(map_function).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
+    yolov3.fit(trainset, epochs = 100, validation_data = validationset);
     yolov3.save('yolov3.h5');
 
 if __name__ == "__main__":
