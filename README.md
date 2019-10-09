@@ -30,10 +30,30 @@ detect objects in an image by executing the following command
 python3 Predictor.py <path/to/image>
 ```
 
-### how to test on COCO 2014 test set
+### how to train YOLOv3 on your own data
 
-run the test by executing
+compose label file in the following format.
+
+><path/to/image1> <target num>
+<x> <y> <width> <height> <label>
+<x> <y> <width> <height> <label>
+...
+<x> <y> <width> <height> <label>
+<path/to/image2> <target num>
+...
+
+generate tfrecord file by executing the following command.
 
 ```bash
-python3 test.py
+python3 create_dataset.py <path/to/annotation>
 ```
+
+the script will generate trainset.tfrecord and validationset.tfrecord.
+
+read the tfrecord with following code.
+
+```python
+from create_dataset import parse_function_generator;
+trainset = tf.data.TFRecordDataset('trainset.tfrecord').map(parse_function_generator(num_classes = num_classes)).repeat(100).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
+```
+
