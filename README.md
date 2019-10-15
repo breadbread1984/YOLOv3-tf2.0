@@ -25,16 +25,20 @@ python3 train_keras.py
 here are some results of my model which can be downloaded [here](#). I trained YOLO v3 from scratch for 500k iterations with batch size 8 on a single gtx 1080 ti. which is far from the quality of the official darknet model which was trained on four gtx1080 for 500k iterations. I show my result here anyway.
 
 <p align="center">
-  Loss
-  <img src="pics/train_loss.png" alt="train loss" width="800" />
-  <img src="pics/validation_loss.png" alt="validation loss" width="800" />
+  <table>  
+    <caption>Loss</caption>
+    <tr><td><img src="pics/train_loss.png" alt="train loss" width="800" /></td></tr>
+    <tr><td><img src="pics/validation_loss.png" alt="validation loss" width="800" /></td></tr>
+  </table>
 </p>
-<p>
-  Detection results
-  <img src="pics/detection1.png" width="400" />
-  <img src="pics/detection2.png" width="400" />
-  <img src="pics/detection3.png" width="400" />
-  <img src="pics/detection4.png" width="400" />
+<p align="center">
+ <table>
+    <caption>Detection results</caption>
+    <tr><td><img src="pics/detection1.png" width="400" /></td></tr>
+    <tr><td><img src="pics/detection2.png" width="400" /></td></tr>
+    <tr><td><img src="pics/detection3.png" width="400" /></td></tr>
+    <tr><td><img src="pics/detection4.png" width="400" /></td></tr>
+  </table>
 </p>
 
 ### how to predict with the trained model
