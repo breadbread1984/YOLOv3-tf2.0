@@ -34,10 +34,14 @@ here are some results of my model which can be downloaded [here](#). I trained Y
 <p align="center">
  <table>
     <caption>Detection results</caption>
-    <tr><td><img src="pics/detection1.png" width="400" /></td></tr>
-    <tr><td><img src="pics/detection2.png" width="400" /></td></tr>
-    <tr><td><img src="pics/detection3.png" width="400" /></td></tr>
-    <tr><td><img src="pics/detection4.png" width="400" /></td></tr>
+    <tr>
+      <td><img src="pics/detection1.png" width="400" /></td>
+      <td><img src="pics/detection2.png" width="400" /></td>
+    </tr>
+    <tr>
+      <td><img src="pics/detection3.png" width="400" /></td>
+      <td><img src="pics/detection4.png" width="400" /></td>
+    </tr>
   </table>
 </p>
 
