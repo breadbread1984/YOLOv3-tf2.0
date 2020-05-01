@@ -43,13 +43,9 @@ def main():
             outputs = yolov3(images);
             loss = yolov3_loss([*outputs, *labels]);
         # check whether the loss numberic is correct
-        try:
-            loss_check = tf.debugging.check_numerics(loss, 'the loss is not correct! cancel train_loss update!');
-            with tf.control_dependencies([loss_check]):
-                train_loss.update_state(loss);
-                print('Step #%d Loss: %.6f' % (optimizer.iterations, loss));
-        except BaseException as e:
-            print(e.message);
+        if tf.math.is_nan(loss):
+            print("NaN was detected in loss, skip the following steps!");
+            continue;
         # write log
         if tf.equal(optimizer.iterations % 10, 0):
             with log.as_default():
@@ -57,12 +53,9 @@ def main():
             train_loss.reset_states();
         grads = tape.gradient(loss, yolov3.trainable_variables);
         # check whether the grad numerics is correct
-        try:
-            grads_check = [tf.debugging.check_numerics(grad, 'the grad is not correct! cancel gradient apply!') for grad in grads];
-            with tf.control_dependencies(grads_check):
-                optimizer.apply_gradients(zip(grads, yolov3.trainable_variables));
-        except BaseException as e:
-            print(e.message);
+        if tf.reduce_any([tf.reduce_any(tf.math.is_nan(grad)) for grad in grads]) == True:
+            print("NaN was detected in gradients, skip gradient apply!");
+            continue;
         # save model
         if tf.equal(optimizer.iterations % 2000, 0):
             # save checkpoint every 1000 steps
