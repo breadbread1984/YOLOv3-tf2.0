@@ -43,7 +43,7 @@ def main():
             outputs = yolov3(images);
             loss = yolov3_loss([*outputs, *labels]);
         # check whether the loss numberic is correct
-        if tf.math.is_nan(loss):
+        if tf.math.reduce_any(tf.math.is_nan(loss)) == True:
             print("NaN was detected in loss, skip the following steps!");
             continue;
         # write log
@@ -53,7 +53,7 @@ def main():
             train_loss.reset_states();
         grads = tape.gradient(loss, yolov3.trainable_variables);
         # check whether the grad numerics is correct
-        if tf.reduce_any([tf.reduce_any(tf.math.is_nan(grad)) for grad in grads]) == True:
+        if tf.math.reduce_any([tf.math.reduce_any(tf.math.is_nan(grad)) for grad in grads]) == True:
             print("NaN was detected in gradients, skip gradient apply!");
             continue;
         # save model
