@@ -46,6 +46,7 @@ def main():
         if tf.math.reduce_any(tf.math.is_nan(loss)) == True:
             print("NaN was detected in loss, skip the following steps!");
             continue;
+        train_loss.update_state(loss);
         # write log
         if tf.equal(optimizer.iterations % 10, 0):
             with log.as_default():
