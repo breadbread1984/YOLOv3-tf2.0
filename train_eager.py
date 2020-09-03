@@ -57,6 +57,7 @@ def main():
         if tf.math.reduce_any([tf.math.reduce_any(tf.math.is_nan(grad)) for grad in grads]) == True:
             print("NaN was detected in gradients, skip gradient apply!");
             continue;
+        optimizer.apply_gradients(zip(grads, yolov3.trainable_variables));
         # save model
         if tf.equal(optimizer.iterations % 2000, 0):
             # save checkpoint every 1000 steps
