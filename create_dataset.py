@@ -1,12 +1,57 @@
 #!/usr/bin/python3
 
-import sys;
-from re import split;
-from random import shuffle;
-import enum;
+from os import mkdir;
+from os.path import join, exists;
+from shutil import rmtree;
+from math import ceil;
+from multiprocessing import Process;
+from pycocotools.coco import COCO;
+import numpy as np;
 import cv2;
 import tensorflow as tf;
-from preprocess import preprocess, bbox_to_tensor;
+
+PROCESS_NUM = 80;
+label_map = tf.constant([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, -1, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, -1, 25, 26, -1, -1, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, -1, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, -1, 61, -1, -1, 62, -1, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, -1, 74, 75, 76, 77, 78, 79, 80], dtype = tf.float32);
+
+def create_dataset(image_dir, label_dir, trainset = True):
+
+  anno = COCO(join(label_dir, 'instances_train2017.json' if trainset else 'instances_val2017.json'));
+  if exists('trainset' if trainset else 'testset'): rmtree('trainset' if trainset else 'testset');
+  mkdir('trainset' if trainset else 'testset');
+  imgs_for_each = ceil(len(anno.getImgIds()) / PROCESS_NUM);
+  handlers = list();
+  filenames = list();
+  for i in range(PROCESS_NUM):
+    filename = ('trainset_part_%d' if trainset else 'testset_part_%d') % i;
+    filenames.append(join('trainset' if trainset else 'testset', filename));
+    handlers.append(Process(target = worker, args = (join('trainset' if trainset else 'testset', filename), anno, image_dir, anno.getImgIds()[i * imgs_for_each:(i+1) * imgs_for_each] if i != PROCESS_NUM - 1 else anno.getImgIds()[i * imgs_for_each:])));
+    handlers[-1].start();
+  for handler in handlers:
+    handler.join();
+
+def worker(filename, anno, image_dir, image_ids):
+  writer = tf.io.TFRecordWriter(filename);
+  for image in image_ids:
+    img_info = anno.loadImgs([image])[0];
+    height, width = img_info['height'], img_info['width'];
+    img = cv2.imread(join(image_dir, img_info['file_name']));
+    if img is None:
+      print('can\'t open image %s' % (join(image_dir, img_info['file_name'])));
+      continue;
+    annIds = anno.getAnnIds(imgIds = image);
+    anns = anno.loadAnns(annIds);
+    bboxs = list();
+    labels = list();
+    for ann in anns:
+      # bounding box
+      bbox_x, bbox_y, bbox_w, bbox_h = ann['bbox'];
+      bbox = tf.constant([bbox_y / height, bbox_x / width, (bbox_y + bbox_h) / height, (bbox_x + bbox_w) / width], dtype = tf.float32);
+      bboxs.append(bbox);
+      # category
+      category = ann['category_id'];
+      labels.append(category);
+    bboxs = tf.stack(bboxs, axis = 0); # bboxs.shape = (obj_num, 4)
+    labels = tf.stack(labels, axis = 0); # labels.shape = (obj_num)
 
 def main(file_path):
 
