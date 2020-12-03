@@ -2,6 +2,7 @@
 
 import numpy as np;
 import tensorflow as tf;
+import tensorflow_addons as tfa;
 
 # NOTE: using functional API can save a lot of gmem
 
@@ -116,9 +117,10 @@ def Loss(img_shape, class_num = 80):
         (img_shape[0] // 16, img_shape[1] // 16, 3, 5 + class_num),
         (img_shape[0] // 8, img_shape[1] // 8, 3, 5 + class_num)
     ];
-    inputs = [tf.keras.Input(input_shape) for input_shape in input_shapes];
-    labels = [tf.keras.Input(input_shape) for input_shape in input_shapes];
+    inputs = [tf.keras.Input(input_shape) for input_shape in input_shapes]; # inputs[0].shape = (13, 13, 3, 5 + class num), inputs[1].shape = (26, 26, 3, 5 + class num), inputs[2].shape = (52, 52, 3, 5 + class num)
+    labels = [tf.keras.Input(input_shape) for input_shape in input_shapes]; # labels[0].shape = (13, 13, 3, 5 + class num), labels[1].shape = (26, 26, 3, 5 + class num), labels[2].shape = (52, 52, 3, 5 + class num)
     losses = list();
+    # for each branch (scale)
     for l in range(3):
         input_shape_of_this_layer = input_shapes[l];
         anchors_of_this_layer = anchors[l];
@@ -126,42 +128,31 @@ def Loss(img_shape, class_num = 80):
         label_of_this_layer = labels[l];
         # bounding info from YOLOv3
         pred_xy, pred_wh, pred_box_confidence, pred_class = OutputParser(input_shape_of_this_layer, img_shape, anchors_of_this_layer)(input_of_this_layer);
-        pred_box = tf.keras.layers.Concatenate()([pred_xy, pred_wh]);
+        pred_box = tf.keras.layers.Concatenate()([pred_xy, pred_wh]); # pred_box.shape = (batch, grid h, grid w, anchor_num, 4)
         # bounding info from label
-        true_box = tf.keras.layers.Lambda(lambda x: x[..., 0:4])(label_of_this_layer);
-        true_box_confidence = tf.keras.layers.Lambda(lambda x: x[..., 4])(label_of_this_layer);
-        true_class = tf.keras.layers.Lambda(lambda x: x[..., 5:])(label_of_this_layer);
+        true_box = tf.keras.layers.Lambda(lambda x: x[..., 0:4])(label_of_this_layer); # true_box.shape = (batch, grid h, grid w, anchor_num, 4)
+        true_box_confidence = tf.keras.layers.Lambda(lambda x: x[..., 4])(label_of_this_layer); # true_box_confidence.shape = (batch, grid h, grid w, anchor_num)
+        true_class = tf.keras.layers.Lambda(lambda x: x[..., 5:])(label_of_this_layer); # true_class.shape = (batch, grid h, grid w, anchor_num, class_num)
         # mask of true positive
         object_mask = tf.keras.layers.Lambda(lambda x: tf.cast(x, dtype = tf.bool))(true_box_confidence);
         # mean square error of bounding location in proportional coordinates
         # pos_loss.shape = ()
-        # only supervise boundings of positve examples.
+        # 1) only supervise boundings of positve examples.
         pos_loss = tf.keras.layers.Lambda(lambda x:
             tf.math.reduce_sum(tf.keras.losses.MSE(
-                tf.boolean_mask(x[0], x[2]),
-                tf.boolean_mask(x[1], x[2])
+                tf.boolean_mask(x[0], x[2]), # obj_true_box.shape = (object_num, 4)
+                tf.boolean_mask(x[1], x[2]) # obj_pred_box.shape = (object_num, 4)
             ))
         )([true_box, pred_box, object_mask]);
         # confidence_loss.shape = ()
-        # punish more to unobject areas to avoid false alarms.
-        confidence_loss = tf.keras.layers.Lambda(lambda x:
-            # supervise positive examples with weight 1
-            tf.keras.losses.BinaryCrossentropy(from_logits = False)(
-                tf.boolean_mask(x[0], x[2]),
-                tf.boolean_mask(x[1], x[2])
-            ) +
-            # supervise negative examples with weight 100
-            100 * tf.keras.losses.BinaryCrossentropy(from_logits = False)(
-                tf.boolean_mask(x[0], tf.math.logical_not(x[2])),
-                tf.boolean_mask(x[1], tf.math.logical_not(x[2]))
-            ) 
-        )([true_box_confidence, pred_box_confidence, object_mask]);
+        # 2) punish wrongly predicted confidence with focal loss
+        confidence_loss = tfa.losses.SigmoidFocalCrossEntropy(from_logits = False)(true_box_confidence, pred_box_confidence);
         # class_loss.shape = ()
-        # only supervise classes of positive examples.
+        # 3) only supervise classes of positive examples.
         class_loss = tf.keras.layers.Lambda(lambda x:
             tf.keras.losses.BinaryCrossentropy(from_logits = False)(
-                tf.boolean_mask(x[0], x[2]),
-                tf.boolean_mask(x[1], x[2])
+                tf.boolean_mask(x[0], x[2]), # obj_true_class.shape = (object_num, class_num)
+                tf.boolean_mask(x[1], x[2]) # obj_pred_class.shape = (object_num, class_num)
             )
         )([true_class, pred_class, object_mask]);
         loss = tf.keras.layers.Lambda(lambda x: tf.math.add_n(x))([pos_loss, confidence_loss, class_loss]);
