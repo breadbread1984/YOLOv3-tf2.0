@@ -24,17 +24,17 @@ def bbox_to_tensor(img_shape, num_classes = 80):
   relative_bbox_center = tf.keras.layers.Lambda(lambda x: tf.reverse((x[..., 0:2] + x[..., 2:4]) / 2, axis = [-1]))(bbox); # relative_bbox_center.shape = (obj_num, 2) in sequence of (center x, center y)
   relative_bbox_wh = tf.keras.layers.Lambda(lambda x: tf.reverse(tf.math.abs(x[..., 2:4] - x[..., 0:2]), axis = [-1]))(bbox); # relative_bbox_wh.shape = (obj_num, 2) in sequence of (w, h)
   relative_bbox = tf.keras.layers.Concatenate(axis = -1)([relative_bbox_center, relative_bbox_wh]); # relative_bbox.shape = (obj_num, 4) in sequence of (center x, center y, w, h)
-  valid_bbox = tf.keras.layers.Lambda(lambda x: tf.boolean_mask(x, tf.math.logical_and(tf.greater(x[...,2], 0), tf.greater(x[...,3], 0))))(relative_bbox); # valid_bbox.shape = (valid_num, 4) in sequence of (center x, center y, w, h)
-  valid_labels = tf.keras.layers.Lambda(lambda x: tf.boolean_mask(x[0], tf.math.logical_and(tf.greater(x[1][...,2], 0), tf.greater(x[1][...,3], 0))))([labels, relative_bbox]); # valid_labels.shape = (valid_num)
-  bbox_maxes = tf.keras.layers.Lambda(lambda x, s: x[...,2:4] * tf.expand_dims(s, axis = 0) / 2, arguments = {'s': img_shape})(valid_bbox); # bbox_maxes.shape = (valid_num, 2)
+  valid_bbox = tf.keras.layers.Lambda(lambda x: tf.boolean_mask(x, tf.math.logical_and(tf.math.greater(x[...,2], 0), tf.math.greater(x[...,3], 0))))(relative_bbox); # valid_bbox.shape = (valid_num, 4) in sequence of (center x, center y, w, h)
+  valid_labels = tf.keras.layers.Lambda(lambda x: tf.boolean_mask(x[0], tf.math.logical_and(tf.math.greater(x[1][...,2], 0), tf.math.greater(x[1][...,3], 0))))([labels, relative_bbox]); # valid_labels.shape = (valid_num)
+  bbox_maxes = tf.keras.layers.Lambda(lambda x, s: x[...,2:4] * tf.expand_dims(tf.cast(s, dtype = tf.float32), axis = 0) / 2, arguments = {'s': img_shape})(valid_bbox); # bbox_maxes.shape = (valid_num, 2)
   bbox_mins = tf.keras.layers.Lambda(lambda x: -x)(bbox_maxes); # bbox_mins.shape = (valid_num, 2)
   bbox_wh = tf.keras.layers.Lambda(lambda x: x[0] - x[1])([bbox_maxes, bbox_mins]); # bbox_wh.shape = (valid num, 2)
-  bbox_area = tf.keras.layers.Lambda(lambda x: tf.expand_dims(tf.expand_dims(x[...,0] * x[...,1], axis = 0), axis = 0))(bbox_wh); # bbox_area.shape = (1, 1, valid_num)
-  intersect_maxes = tf.keras.layers.Lambda(lambda x, a: tf.math.minimum(tf.expand_dims(a/2, axis = -2), tf.expand_dims(tf.expand_dims(x, axis = 0), axis = 0)), arguments = {'a': anchors})(bbox_maxes); # intersect_maxes.shape = (level num, anchor num, valid num, 2)
-  intersect_mins = tf.keras.layers.Lambda(lambda x, a: tf.math.maximum(tf.expand_dims(-a/2, axis = -2), tf.expand_dims(tf.expand_dims(x, axis = 0), axis = 0)), arguments = {'a': anchors})(bbox_mins); # intersect_mins.shape = (level num, anchor num, valid num, 2)
+  bbox_area = tf.keras.layers.Lambda(lambda x: tf.reshape(x[...,0] * x[...,1], (1, 1, -1)))(bbox_wh); # bbox_area.shape = (1, 1, valid_num)
+  intersect_maxes = tf.keras.layers.Lambda(lambda x, a: tf.math.minimum(tf.expand_dims(tf.cast(a, dtype = tf.float32)/2, axis = -2), tf.expand_dims(tf.expand_dims(x, axis = 0), axis = 0)), arguments = {'a': anchors})(bbox_maxes); # intersect_maxes.shape = (level num, anchor num, valid num, 2)
+  intersect_mins = tf.keras.layers.Lambda(lambda x, a: tf.math.maximum(tf.expand_dims(-tf.cast(a, dtype = tf.float32)/2, axis = -2), tf.expand_dims(tf.expand_dims(x, axis = 0), axis = 0)), arguments = {'a': anchors})(bbox_mins); # intersect_mins.shape = (level num, anchor num, valid num, 2)
   intersect_wh = tf.keras.layers.Lambda(lambda x: tf.math.maximum(x[0] - x[1], 0.))([intersect_maxes, intersect_mins]); # intersect_wh.shape = (level num, anchor num, valid num, 2)
   intersect_area = tf.keras.layers.Lambda(lambda x: x[...,0] * x[...,1])(intersect_wh); # intersect_area.shape = (level num, anchor num, valid num)
-  iou = tf.keras.layers.Lambda(lambda x, a: x[0] / (x[1] + tf.expand_dims(a[...,0] * a[...,1], axis = -1)), arguments = {'a': anchors})([intersect_area, bbox_area]); # iou.shape = (level num, anchor num, valid num)
+  iou = tf.keras.layers.Lambda(lambda x, a: x[0] / (x[1] + tf.expand_dims(tf.cast(a, dtype = tf.float32)[...,0] * tf.cast(a, dtype = tf.float32)[...,1], axis = -1)), arguments = {'a': anchors})([intersect_area, bbox_area]); # iou.shape = (level num, anchor num, valid num)
   best_idx = tf.keras.layers.Lambda(lambda x: tf.math.argmax(tf.reshape(x, (-1, tf.shape(x)[-1])), axis = 0))(iou); # best_idx.shape = (valid num)
   best_levels = tf.keras.layers.Lambda(lambda x: x // 3)(best_idx); # best_levels.shape = (valid_num)
   best_anchors = tf.keras.layers.Lambda(lambda x: x % 3)(best_idx); # best_anchors.shape = (valid_num)
@@ -47,11 +47,11 @@ def bbox_to_tensor(img_shape, num_classes = 80):
     tf.cast(
       tf.concat([
         tf.reverse(x[0][..., 0:2], axis = [-1]) * tf.constant([[h // 32, w // 32]], dtype = tf.float32), # shape = (level1 num, 2)
-        tf.expand_dims(x[1], axis = -1) # shape = (level1 num, 1)
+        tf.expand_dims(tf.cast(x[1], dtype = tf.float32), axis = -1) # shape = (level1 num, 1)
       ], axis = -1), dtype = tf.int32), 
     clip_value_min = 0, clip_value_max = [[h//32-1, w//32-1, 2]]), 
     arguments = {'h': img_shape[1], 'w': img_shape[0]})([level1_bbox, level1_anchors]); # level1_coords.shape = (level1_num, 3) in sequence of (h, w, anchor)
-  level1_outputs = tf.keras.layers.Lambda(lambda x, c: tf.concat([x[0], tf.ones((tf.shape(x[0])[0], 1), dtype = tf.float32), tf.one_hot(x[1], c)], axis = -1), arguments = {'c': num_classes})([level1_bbox, level1_labels]); # level1_outputs.shape = (level1_num, 5 + c)
+  level1_outputs = tf.keras.layers.Lambda(lambda x, c: tf.concat([x[0], tf.ones((tf.shape(x[0])[0], 1), dtype = tf.float32), tf.one_hot(tf.cast(x[1], dtype = tf.int32), c)], axis = -1), arguments = {'c': num_classes})([level1_bbox, level1_labels]); # level1_outputs.shape = (level1_num, 5 + c)
   level1_gt = tf.keras.layers.Lambda(lambda x, h, w, c: tf.scatter_nd(updates = x[0], indices = x[1], shape = (h // 32, w // 32, 3, 5 + c)), arguments = {'h': img_shape[1], 'w': img_shape[0], 'c': num_classes})([level1_outputs, level1_coords]); # level1_gt.shape = (h//32, w//32, 3, 5+c)
   level2_mask = tf.keras.layers.Lambda(lambda x: tf.math.equal(x, 1))(best_levels); # level2_mask.shape = (valid_num)
   level2_anchors = tf.keras.layers.Lambda(lambda x: tf.boolean_mask(x[0], x[1]))([best_anchors, level2_mask]); # level2_anchors.shape = (level2 num)
@@ -61,11 +61,11 @@ def bbox_to_tensor(img_shape, num_classes = 80):
     tf.cast(
       tf.concat([
         tf.reverse(x[0][..., 0:2], axis = [-1]) * tf.constant([[h // 16, w // 16]], dtype = tf.float32), # shape = (level2 num, 2)
-        tf.expand_dims(x[1], axis = -1) # shape = (level2 num, 1)
+        tf.expand_dims(tf.cast(x[1], dtype = tf.float32), axis = -1) # shape = (level2 num, 1)
       ], axis = -1), dtype = tf.int32), 
     clip_value_min = 0, clip_value_max = [[h//16-1, w//16-1, 2]]), 
     arguments = {'h': img_shape[1], 'w': img_shape[0]})([level2_bbox, level2_anchors]); # level2_outputs.shape = (level2_num, 3) in sequence of (h, w, anchor)
-  level2_outputs = tf.keras.layers.Lambda(lambda x, c: tf.concat([x[0], tf.ones((tf.shape(x[0])[0], 1), dtype = tf.float32), tf.one_hot(x[1], c)], axis = -1), arguments = {'c': num_classes})([level2_bbox, level2_labels]); # level2_outputs.shape = (level2_num, 5 + c)
+  level2_outputs = tf.keras.layers.Lambda(lambda x, c: tf.concat([x[0], tf.ones((tf.shape(x[0])[0], 1), dtype = tf.float32), tf.one_hot(tf.cast(x[1], dtype = tf.int32), c)], axis = -1), arguments = {'c': num_classes})([level2_bbox, level2_labels]); # level2_outputs.shape = (level2_num, 5 + c)
   level2_gt = tf.keras.layers.Lambda(lambda x, h, w, c: tf.scatter_nd(updates = x[0], indices = x[1], shape = (h // 16, w // 16, 3, 5 + c)), arguments = {'h': img_shape[1], 'w': img_shape[0], 'c': num_classes})([level2_outputs, level2_coords]); # level2_gt.shape = (h//16, w//16, 3, 5+c)
   level3_mask = tf.keras.layers.Lambda(lambda x: tf.math.equal(x, 2))(best_levels); # level3_mask.shape = (valid_num)
   level3_anchors = tf.keras.layers.Lambda(lambda x: tf.boolean_mask(x[0], x[1]))([best_anchors, level3_mask]); # level3_anchors.shape = (level3 num)
@@ -75,11 +75,11 @@ def bbox_to_tensor(img_shape, num_classes = 80):
     tf.cast(
       tf.concat([
         tf.reverse(x[0][..., 0:2], axis = [-1]) * tf.constant([[h // 8, w // 8]], dtype = tf.float32), # shape = (level3 num, 2)
-        tf.expand_dims(x[1], axis = -1) # shape = (level3 num, 1)
+        tf.expand_dims(tf.cast(x[1], dtype = tf.float32), axis = -1) # shape = (level3 num, 1)
       ], axis = -1), dtype = tf.int32), 
     clip_value_min = 0, clip_value_max = [[h//8-1, w//8-1, 2]]), 
     arguments = {'h': img_shape[1], 'w': img_shape[0]})([level3_bbox, level3_anchors]); # level3_outputs.shape = (level3_num, 3) in sequence of (h, w, anchor)
-  level3_outputs = tf.keras.layers.Lambda(lambda x, c: tf.concat([x[0], tf.ones((tf.shape(x[0])[0], 1), dtype = tf.float32), tf.one_hot(x[1], c)], axis = -1), arguments = {'c': num_classes})([level3_bbox, level3_labels]); # level3_outputs.shape = (level3_num, 5 + c)
+  level3_outputs = tf.keras.layers.Lambda(lambda x, c: tf.concat([x[0], tf.ones((tf.shape(x[0])[0], 1), dtype = tf.float32), tf.one_hot(tf.cast(x[1], dtype = tf.int32), c)], axis = -1), arguments = {'c': num_classes})([level3_bbox, level3_labels]); # level3_outputs.shape = (level3_num, 5 + c)
   level3_gt = tf.keras.layers.Lambda(lambda x, h, w, c: tf.scatter_nd(updates = x[0], indices = x[1], shape = (h // 8, w // 8, 3, 5 + c)), arguments = {'h': img_shape[1], 'w': img_shape[0], 'c': num_classes})([level3_outputs, level3_coords]); # level3_gt.shape = (h//8, w//8, 3, 5+c)
   return tf.keras.Model(inputs = (bbox, labels), outputs = (level1_gt, level2_gt, level3_gt));
 
@@ -204,9 +204,9 @@ def map_function_impl_generator(num_classes):
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 2:
-        print("Usage: " + sys.argv[0] + " <path/to/annotation>");
-        exit(1);
-    assert tf.executing_eagerly() == True;
-    main(sys.argv[1]);
-
+  from sys import argv;
+  if len(argv) != 2:
+    print("Usage: " + argv[0] + " <path/to/annotation>");
+    exit(1);
+  assert tf.executing_eagerly() == True;
+  main(argv[1]);
