@@ -174,6 +174,7 @@ def worker(filename, anno, image_dir, image_ids):
     for ann in anns:
       # bounding box
       bbox_x, bbox_y, bbox_w, bbox_h = ann['bbox'];
+      # relative upper left y, x, bottom right y, x with respect to the height and width
       bbox = tf.constant([bbox_y / height, bbox_x / width, (bbox_y + bbox_h) / height, (bbox_x + bbox_w) / width], dtype = tf.float32);
       bboxs.append(bbox);
       # category
