@@ -24,8 +24,8 @@ def bbox_to_tensor(img_shape, num_classes = 80):
   relative_bbox_center = tf.keras.layers.Lambda(lambda x: tf.reverse((x[..., 0:2] + x[..., 2:4]) / 2, axis = [-1]))(bbox); # relative_bbox_center.shape = (obj_num, 2) in sequence of (center x, center y)
   relative_bbox_wh = tf.keras.layers.Lambda(lambda x: tf.reverse(tf.math.abs(x[..., 2:4] - x[..., 0:2]), axis = [-1]))(bbox); # relative_bbox_wh.shape = (obj_num, 2) in sequence of (w, h)
   relative_bbox = tf.keras.layers.Concatenate(axis = -1)([relative_bbox_center, relative_bbox_wh]); # relative_bbox.shape = (obj_num, 4) in sequence of (center x, center y, w, h)
-  valid_bbox = tf.keras.layers.Lambda(lambda x: tf.boolean_mask(x, tf.greater(x[...,2], 0)))(relative_bbox); # valid_bbox.shape = (valid_num, 4) in sequence of (center x, center y, w, h)
-  valid_labels = tf.keras.layers.Lambda(lambda x: tf.boolean_mask(x[0], tf.greater(x[1][...,2], 0)))([labels, relative_bbox]); # valid_labels.shape = (valid_num)
+  valid_bbox = tf.keras.layers.Lambda(lambda x: tf.boolean_mask(x, tf.math.logical_and(tf.greater(x[...,2], 0), tf.greater(x[...,3], 0))))(relative_bbox); # valid_bbox.shape = (valid_num, 4) in sequence of (center x, center y, w, h)
+  valid_labels = tf.keras.layers.Lambda(lambda x: tf.boolean_mask(x[0], tf.math.logical_and(tf.greater(x[1][...,2], 0), tf.greater(x[1][...,3], 0))))([labels, relative_bbox]); # valid_labels.shape = (valid_num)
   bbox_maxes = tf.keras.layers.Lambda(lambda x, s: x[...,2:4] * tf.expand_dims(s, axis = 0) / 2, arguments = {'s': img_shape})(valid_bbox); # bbox_maxes.shape = (valid_num, 2)
   bbox_mins = tf.keras.layers.Lambda(lambda x: -x)(bbox_maxes); # bbox_mins.shape = (valid_num, 2)
   bbox_wh = tf.keras.layers.Lambda(lambda x: x[0] - x[1])([bbox_maxes, bbox_mins]); # bbox_wh.shape = (valid num, 2)
@@ -77,7 +77,7 @@ def bbox_to_tensor(img_shape, num_classes = 80):
         tf.reverse(x[0][..., 0:2], axis = [-1]) * tf.constant([[h // 8, w // 8]], dtype = tf.float32), # shape = (level3 num, 2)
         tf.expand_dims(x[1], axis = -1) # shape = (level3 num, 1)
       ], axis = -1), dtype = tf.int32), 
-    clip_value_min = 0, clip_value_max  = [[h//8-1, w//8-1, 2]]), 
+    clip_value_min = 0, clip_value_max = [[h//8-1, w//8-1, 2]]), 
     arguments = {'h': img_shape[1], 'w': img_shape[0]})([level3_bbox, level3_anchors]); # level3_outputs.shape = (level3_num, 3) in sequence of (h, w, anchor)
   level3_outputs = tf.keras.layers.Lambda(lambda x, c: tf.concat([x[0], tf.ones((tf.shape(x[0])[0], 1), dtype = tf.float32), tf.one_hot(x[1], c)], axis = -1), arguments = {'c': num_classes})([level3_bbox, level3_labels]); # level3_outputs.shape = (level3_num, 5 + c)
   level3_gt = tf.keras.layers.Lambda(lambda x, h, w, c: tf.scatter_nd(updates = x[0], indices = x[1], shape = (h // 8, w // 8, 3, 5 + c)), arguments = {'h': img_shape[1], 'w': img_shape[0], 'c': num_classes})([level3_outputs, level3_coords]); # level3_gt.shape = (h//8, w//8, 3, 5+c)
