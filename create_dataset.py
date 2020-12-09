@@ -13,6 +13,47 @@ import tensorflow as tf;
 PROCESS_NUM = 80;
 label_map = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, -1, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, -1, 25, 26, -1, -1, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, -1, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, -1, 61, -1, -1, 62, -1, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, -1, 74, 75, 76, 77, 78, 79, 80];
 
+def ExampleParser(augmentation = True, img_shape = (416, 416), jitter = .3, hue = .1, sat = 1.5, bri = .1):
+
+  # NOTE: img_shape = (width, height)
+  assert len(img_shape) == 2;
+  image = tf.keras.Input((None, None, 3)); # image.shape = (batch, h, w, 3)
+  bbox = tf.keras.Input((None, 4)); # bbox.shape = (batch, obj_num, 4)
+  if augmentation == True:
+    aspect_ratio_jitter = tf.keras.layers.Lambda(lambda x, j: tf.random.uniform(shape = (2,), minval = 1 - j, maxval = 1 + j, dtype = tf.float32), arguments = {'j': jitter})(image); # aspect_ratio_jitter.shape = (2)
+    resize_input_shape = tf.keras.layers.Lambda(lambda x, h, w: tf.cast([h, w], dtype = tf.float32) * x, 
+                                                arguments = {'h': img_shape[1], 'w': img_shape[0]})(aspect_ratio_jitter); # resize_input_shape.shape = (2)
+    scale = tf.keras.layers.Lambda(lambda x: tf.random.uniform(shape = (1,), minval = .8, maxval = 1.2, dtype = tf.float32))(image); # scale.shape = (1)
+    resize_shape = tf.keras.layers.Lambda(lambda x: )
+    resize_image = tf.keras.layers.Lambda(lambda x, h, w: tf.image.resize(
+                                            x, 
+                                            tf.cast(tf.cond(
+                                              tf.greater(),
+                                              true_fn = lambda: tf.random.uniform(shape = [1], minval = .8, maxval = 1.2, dtype = tf.float32) 
+                                            ), dtype = tf.int32), 
+                                            method = tf.image.ResizeMethod.BICUBIC),
+                                          arguments = {'h': img_shape[1], 'w': img_shape[0]})(image);
+  else:
+    resize_image = tf.keras.layers.Lambda(lambda x, h, w: tf.image.resize(x, (h, w), method = tf.image.ResizeMethod.BICUBIC, preserve_aspect_ratio = True), arguments = {'h': img_shape[1], 'w': img_shape[0]})(image); # resize_image.shape = (batch, nh, nw, 3)
+    pad_image = tf.keras.layers.Lambda(lambda x, h, w: tf.pad(x, [[0,0],
+                                                                  [(h - tf.shape(x)[1])//2, (h - tf.shape(x)[1]) - (h - tf.shape(x)[1])//2],
+                                                                  [(w - tf.shape(x)[2])//2, (w - tf.shape(x)[2]) - (w - tf.shape(x)[2])//2],
+                                                                  [0,0]], constant_values = 128), 
+                                       arguments = {'h': img_shape[1], 'w': img_shape[0]})(resize_image); # resize_image.shape = (batch, 416, 416, 3)
+    final_image = tf.keras.layers.Lambda(lambda x: tf.cast(x, tf.float32) / 255.)(pad_image); # image_data.shape = (batch, 416, 416, 3)
+    resize_bbox = tf.keras.layers.Lambda(lambda x: x[0] * tf.cast([[[tf.shape(x[1])[1], 
+                                                                     tf.shape(x[1])[2], 
+                                                                     tf.shape(x[1])[1], 
+                                                                     tf.shape(x[1])[2]]]], dtype = tf.float32))([bbox, resize_image]); # resize_bbox.shape = (batch, obj_num, 4)
+    pad_bbox = tf.keras.layers.Lambda(lambda x, h, w: x[0] + tf.cast([[[(h - tf.shape(x[1])[1])//2,
+                                                                        (w - tf.shape(x[1])[2])//2,
+                                                                        (h - tf.shape(x[1])[1])//2,
+                                                                        (w - tf.shape(x[1])[2])//2]]], dtype = tf.float32), 
+                                      arguments = {'h': img_shape[1], 'w': img_shape[0]})([resize_bbox, resize_image]);
+    final_bbox = tf.keras.layers.Lambda(lambda x, h, w: x / tf.cast([[[h, w, h, w]]], dtype = tf.float32),
+                                        arguments = {'h': img_shape[1], 'w': img_shape[0]})(pad_bbox);
+  return tf.keras.Model(inputs = (image, bbox), outputs = (final_image, final_bbox));
+
 def bbox_to_tensor(img_shape, num_classes = 80):
 
   # NOTE: img_shape = (width, height)
