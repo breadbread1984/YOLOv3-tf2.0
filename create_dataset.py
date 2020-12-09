@@ -51,7 +51,7 @@ def bbox_to_tensor(img_shape, num_classes = 80):
     clip_value_min = 0, clip_value_max = [[h//32-1, w//32-1, 2]]), 
     arguments = {'h': img_shape[1], 'w': img_shape[0]})([level1_bbox, level1_anchors]); # level1_coords.shape = (level1_num, 3) in sequence of (h, w, anchor)
   level1_outputs = tf.keras.layers.Lambda(lambda x, c: tf.concat([x[0], tf.ones((tf.shape(x[0])[0], 1), dtype = tf.float32), tf.one_hot(x[1], c)], axis = -1), arguments = {'c': num_classes})([level1_bbox, level1_labels]); # level1_outputs.shape = (level1_num, 5 + c)
-  level1_gt = tf.keras.layers.Lambda(lambda x, h, w, c: tf.scatter_nd(updates = x[0], indices = x[1], shape = (h // 32, w // 32, 3, 5 + c)), arguments = {'h': img_shape[1], 'w': img_shape[0], 'c': num_classes})([level1_outputs, level1_coords]); # level1_gt.shape = (h//32, w//32, 5+c)
+  level1_gt = tf.keras.layers.Lambda(lambda x, h, w, c: tf.scatter_nd(updates = x[0], indices = x[1], shape = (h // 32, w // 32, 3, 5 + c)), arguments = {'h': img_shape[1], 'w': img_shape[0], 'c': num_classes})([level1_outputs, level1_coords]); # level1_gt.shape = (h//32, w//32, 3, 5+c)
   level2_mask = tf.keras.layers.Lambda(lambda x: tf.math.equal(x, 1))(best_levels); # level2_mask.shape = (valid_num)
   level2_anchors = tf.keras.layers.Lambda(lambda x: tf.boolean_mask(x[0], x[1]))([best_anchors, level2_mask]); # level2_anchors.shape = (level2 num)
   level2_bbox = tf.keras.layers.Lambda(lambda x: tf.boolean_mask(x[0], x[1]))([valid_bbox, level2_mask]); # level2_bbox.shape = (level2 num, 4)
@@ -65,7 +65,7 @@ def bbox_to_tensor(img_shape, num_classes = 80):
     clip_value_min = 0, clip_value_max = [[h//16-1, w//16-1, 2]]), 
     arguments = {'h': img_shape[1], 'w': img_shape[0]})([level2_bbox, level2_anchors]); # level2_outputs.shape = (level2_num, 3) in sequence of (h, w, anchor)
   level2_outputs = tf.keras.layers.Lambda(lambda x, c: tf.concat([x[0], tf.ones((tf.shape(x[0])[0], 1), dtype = tf.float32), tf.one_hot(x[1], c)], axis = -1), arguments = {'c': num_classes})([level2_bbox, level2_labels]); # level2_outputs.shape = (level2_num, 5 + c)
-  level2_gt = tf.keras.layers.Lambda(lambda x, h, w, c: tf.scatter_nd(updates = x[0], indices = x[1], shape = (h // 16, w // 16, 3, 5 + c)), arguments = {'h': img_shape[1], 'w': img_shape[0], 'c': num_classes})([level2_outputs, level2_coords]); # level2_gt.shape = (h//16, w//16, 5+c)
+  level2_gt = tf.keras.layers.Lambda(lambda x, h, w, c: tf.scatter_nd(updates = x[0], indices = x[1], shape = (h // 16, w // 16, 3, 5 + c)), arguments = {'h': img_shape[1], 'w': img_shape[0], 'c': num_classes})([level2_outputs, level2_coords]); # level2_gt.shape = (h//16, w//16, 3, 5+c)
   level3_mask = tf.keras.layers.Lambda(lambda x: tf.math.equal(x, 2))(best_levels); # level3_mask.shape = (valid_num)
   level3_anchors = tf.keras.layers.Lambda(lambda x: tf.boolean_mask(x[0], x[1]))([best_anchors, level3_mask]); # level3_anchors.shape = (level3 num)
   level3_bbox = tf.keras.layers.Lambda(lambda x: tf.boolean_mask(x[0], x[1]))([valid_bbox, level3_mask]); # level3_bbox.shape = (level3 num, 4)
@@ -79,7 +79,7 @@ def bbox_to_tensor(img_shape, num_classes = 80):
     clip_value_min = 0, clip_value_max  = [[h//8-1, w//8-1, 2]]), 
     arguments = {'h': img_shape[1], 'w': img_shape[0]})([level3_bbox, level3_anchors]); # level3_outputs.shape = (level3_num, 3) in sequence of (h, w, anchor)
   level3_outputs = tf.keras.layers.Lambda(lambda x, c: tf.concat([x[0], tf.ones((tf.shape(x[0])[0], 1), dtype = tf.float32), tf.one_hot(x[1], c)], axis = -1), arguments = {'c': num_classes})([level3_bbox, level3_labels]); # level3_outputs.shape = (level3_num, 5 + c)
-  level3_gt = tf.keras.layers.Lambda(lambda x, h, w, c: tf.scatter_nd(updates = x[0], indices = x[1], shape = (h // 8, w // 8, 3, 5 + c)), arguments = {'h': img_shape[1], 'w': img_shape[0], 'c': num_classes})([level3_outputs, level3_coords]); # level3_gt.shape = (h//8, w//8, 5+c)
+  level3_gt = tf.keras.layers.Lambda(lambda x, h, w, c: tf.scatter_nd(updates = x[0], indices = x[1], shape = (h // 8, w // 8, 3, 5 + c)), arguments = {'h': img_shape[1], 'w': img_shape[0], 'c': num_classes})([level3_outputs, level3_coords]); # level3_gt.shape = (h//8, w//8, 3, 5+c)
   return tf.keras.Model(inputs = (bbox, labels), outputs = (level1_gt, level2_gt, level3_gt));
 
 def parse_function_generator(num_classes, input_shape = (416,416), random = False, jitter = .3, hue = .1, sat = 1.5, bri = .1):
