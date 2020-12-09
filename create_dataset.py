@@ -20,6 +20,7 @@ def bbox_to_tensor(img_shape, num_classes = 80):
   anchors = [[[116,90], [156,198], [373,326]], [[30,61], [62,45], [59,119]], [[10,13], [16,30], [33,23]]]; # anchors.shape = (level num = 3, anchor num = 3, 2)
   bbox = tf.keras.Input((4,)); # bbox.shape = (obj_num, 4)
   labels = tf.keras.Input(()); # labels.shape = (obj_num)
+  # 1) choose the best anchor box with the maximum of IOU with target bounding
   relative_bbox_center = tf.keras.layers.Lambda(lambda x: tf.reverse((x[..., 0:2] + x[..., 2:4]) / 2, axis = [-1]))(bbox); # relative_bbox_center.shape = (obj_num, 2) in sequence of (center x, center y)
   relative_bbox_wh = tf.keras.layers.Lambda(lambda x: tf.reverse(tf.math.abs(x[..., 2:4] - x[..., 0:2]), axis = [-1]))(bbox); # relative_bbox_wh.shape = (obj_num, 2) in sequence of (w, h)
   relative_bbox = tf.keras.layers.Concatenate(axis = -1)([relative_bbox_center, relative_bbox_wh]); # relative_bbox.shape = (obj_num, 4) in sequence of (center x, center y, w, h)
@@ -37,7 +38,7 @@ def bbox_to_tensor(img_shape, num_classes = 80):
   best_idx = tf.keras.layers.Lambda(lambda x: tf.math.argmax(tf.reshape(x, (-1, tf.shape(x)[-1])), axis = 0))(iou); # best_idx.shape = (valid num)
   best_levels = tf.keras.layers.Lambda(lambda x: x // 3)(best_idx); # best_levels.shape = (valid_num)
   best_anchors = tf.keras.layers.Lambda(lambda x: x % 3)(best_idx); # best_anchors.shape = (valid_num)
-  # generate labels
+  # 2) generate labels
   level1_mask = tf.keras.layers.Lambda(lambda x: tf.math.equal(x, 0))(best_levels); # level1_mask.shape = (valid_num)
   level1_anchors = tf.keras.layers.Lambda(lambda x: tf.boolean_mask(x[0], x[1]))([best_anchors, level1_mask]); # level1_anchors.shape = (level1 num)
   level1_bbox = tf.keras.layers.Lambda(lambda x: tf.boolean_mask(x[0], x[1]))([valid_bbox, level1_mask]); # level1_bbox.shape = (level1 num, 4) in sequence of (center x, center y, w, h)
@@ -45,8 +46,8 @@ def bbox_to_tensor(img_shape, num_classes = 80):
   level1_coords = tf.keras.layers.Lambda(lambda x, h, w: tf.clip_by_value(
     tf.cast(
       tf.concat([
-        tf.reverse(x[0][..., 0:2], axis = [-1]) * tf.constant([[h // 32, w // 32]], dtype = tf.float32),
-        tf.expand_dims(x[1], axis = -1)
+        tf.reverse(x[0][..., 0:2], axis = [-1]) * tf.constant([[h // 32, w // 32]], dtype = tf.float32), # shape = (level1 num, 2)
+        tf.expand_dims(x[1], axis = -1) # shape = (level1 num, 1)
       ], axis = -1), dtype = tf.int32), 
     clip_value_min = 0, clip_value_max = [[h//32-1, w//32-1, 2]]), 
     arguments = {'h': img_shape[1], 'w': img_shape[0]})([level1_bbox, level1_anchors]); # level1_coords.shape = (level1_num, 3) in sequence of (h, w, anchor)
@@ -59,8 +60,8 @@ def bbox_to_tensor(img_shape, num_classes = 80):
   level2_coords = tf.keras.layers.Lambda(lambda x, h, w: tf.clip_by_value(
     tf.cast(
       tf.concat([
-        tf.reverse(x[0][..., 0:2], axis = [-1]) * tf.constant([[h // 16, w // 16]], dtype = tf.float32),
-        tf.expand_dims(x[1], axis = -1)
+        tf.reverse(x[0][..., 0:2], axis = [-1]) * tf.constant([[h // 16, w // 16]], dtype = tf.float32), # shape = (level2 num, 2)
+        tf.expand_dims(x[1], axis = -1) # shape = (level2 num, 1)
       ], axis = -1), dtype = tf.int32), 
     clip_value_min = 0, clip_value_max = [[h//16-1, w//16-1, 2]]), 
     arguments = {'h': img_shape[1], 'w': img_shape[0]})([level2_bbox, level2_anchors]); # level2_outputs.shape = (level2_num, 3) in sequence of (h, w, anchor)
@@ -73,8 +74,8 @@ def bbox_to_tensor(img_shape, num_classes = 80):
   level3_coords = tf.keras.layers.Lambda(lambda x, h, w: tf.clip_by_value(
     tf.cast(
       tf.concat([
-        tf.reverse(x[0][..., 0:2], axis = [-1]) * tf.constant([[h // 8, w // 8]], dtype = tf.float32), 
-        tf.expand_dims(x[1], axis = -1)
+        tf.reverse(x[0][..., 0:2], axis = [-1]) * tf.constant([[h // 8, w // 8]], dtype = tf.float32), # shape = (level3 num, 2)
+        tf.expand_dims(x[1], axis = -1) # shape = (level3 num, 1)
       ], axis = -1), dtype = tf.int32), 
     clip_value_min = 0, clip_value_max  = [[h//8-1, w//8-1, 2]]), 
     arguments = {'h': img_shape[1], 'w': img_shape[0]})([level3_bbox, level3_anchors]); # level3_outputs.shape = (level3_num, 3) in sequence of (h, w, anchor)
