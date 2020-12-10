@@ -232,14 +232,6 @@ def worker(filename, anno, image_dir, image_ids):
     writer.write(trainsample.SerializeToString());
   writer.close();
 
-
-def map_function_impl_generator(num_classes):
-    def map_function_impl(image, bbox, label):
-        image, bbox = preprocess(image, bbox, random = True);
-        label1, label2, label3 = bbox_to_tensor(bbox, label, num_classes = num_classes);
-        return image, label1, label2, label3;
-    return map_function_impl;
-
 if __name__ == "__main__":
 
   from sys import argv;
