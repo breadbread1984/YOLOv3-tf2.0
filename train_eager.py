@@ -7,7 +7,7 @@ import tensorflow as tf;
 import tensorflow_datasets as tfds;
 from YOLOv3 import YOLOv3, Loss;
 from Predictor import Predictor;
-from preprocess import map_function;
+from create_dataset import parse_function_generator;
 
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1';
 #os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3';
@@ -21,9 +21,9 @@ def main():
     yolov3_loss = Loss((416,416,3), 80);
     # load downloaded dataset
     trainset = tfds.load(name = "coco2014", split = tfds.Split.TRAIN, download = False);
-    trainset = trainset.map(map_function).repeat(100).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
+    trainset = trainset.map(parse_function_generator(80)).repeat(100).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
     validationset = tfds.load(name = "coco2014", split = tfds.Split.VALIDATION, download = False);
-    validationset_iter = validationset.map(map_function).repeat(100).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE).__iter__();
+    validationset_iter = validationset.map(parse_function_generator(80)).repeat(100).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE).__iter__();
     testset = tfds.load(name = "coco2014", split = tfds.Split.TEST, download = False); # without label
     testset = testset.repeat(100).prefetch(tf.data.experimental.AUTOTUNE);
     testset_iter = testset.__iter__();

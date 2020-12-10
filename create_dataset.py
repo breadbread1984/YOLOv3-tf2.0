@@ -176,7 +176,7 @@ def parse_function_generator(num_classes, input_shape = (416,416), random = True
     image = tf.squeeze(image, axis = 0);
     bbox = tf.squeeze(bbox, axis = 0);
     # generate label tensors
-    level1, level2, level3 = bbox_to_tensor([bbox, label]);
+    level1, level2, level3 = bbox_to_tensor(img_shape = input_shape, num_classes = num_classes)([bbox, label]);
     return image, (level1, level2, level3);
   return parse_function;
 
