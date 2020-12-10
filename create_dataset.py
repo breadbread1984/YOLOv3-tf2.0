@@ -13,7 +13,7 @@ import tensorflow as tf;
 PROCESS_NUM = 80;
 label_map = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, -1, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, -1, 25, 26, -1, -1, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, -1, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, -1, 61, -1, -1, 62, -1, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, -1, 74, 75, 76, 77, 78, 79, 80];
 
-def ExampleParser(augmentation = True, img_shape = (416, 416), jitter = .3, hue = .1, sat = 1.5, bri = .1):
+def ExampleParser(augmentation = True, img_shape = (416, 416), jitter = .3):
 
   # NOTE: img_shape = (width, height)
   assert len(img_shape) == 2;
@@ -21,8 +21,7 @@ def ExampleParser(augmentation = True, img_shape = (416, 416), jitter = .3, hue 
   bbox = tf.keras.Input((None, 4)); # bbox.shape = (batch, obj_num, 4)
   if augmentation == True:
     aspect_ratio_jitter = tf.keras.layers.Lambda(lambda x, j: tf.random.uniform(shape = (2,), minval = 1 - j, maxval = 1 + j, dtype = tf.float32), arguments = {'j': jitter})(image); # aspect_ratio_jitter.shape = (2)
-    resize_input_shape = tf.keras.layers.Lambda(lambda x, h, w: tf.cast([h, w], dtype = tf.float32) * x, 
-                                                arguments = {'h': img_shape[1], 'w': img_shape[0]})(aspect_ratio_jitter); # resize_input_shape.shape = (2) in sequence of (h, w)
+    resize_input_shape = tf.keras.layers.Lambda(lambda x, h, w: tf.cast([h, w], dtype = tf.float32) * x, arguments = {'h': img_shape[1], 'w': img_shape[0]})(aspect_ratio_jitter); # resize_input_shape.shape = (2) in sequence of (h, w)
     scale = tf.keras.layers.Lambda(lambda x: tf.random.uniform(shape = (1,), minval = .8, maxval = 1.2, dtype = tf.float32))(image); # scale.shape = (1)
     resize_shape = tf.keras.layers.Lambda(lambda x: tf.cast(tf.cond(tf.greater(x[1][0], x[1][1]), true_fn = lambda: x[2] * x[1] / x[0][0], false_fn = lambda: x[2] * x[1] / x[0][1]), dtype = tf.int32))([aspect_ratio_jitter, resize_input_shape, scale]); # resize_shape.shape = (2) in sequence of (h, w)
     resize_image = tf.keras.layers.Lambda(lambda x: tf.image.resize(x[0], x[1], method = tf.image.ResizeMethod.BICUBIC))([image, resize_shape]);
@@ -54,7 +53,13 @@ def ExampleParser(augmentation = True, img_shape = (416, 416), jitter = .3, hue 
     crop_bbox = tf.keras.layers.Lambda(lambda x: x[0] + tf.cast([-x[1], -x[2], -x[1], -x[2]], dtype = tf.float32))([crop_bbox, offset_height, offset_width]);
     crop_bbox = tf.keras.layers.Lambda(lambda x, h, w: x[0] / tf.cast([h, w, h, w], dtype = tf.float32), arguments = {'h': img_shape[1], 'w': img_shape[0]})(crop_bbox);
     # 5) random flip image
-    
+    flip = tf.keras.layers.Lambda(lambda x: tf.math.less(np.random.rand(), 0.5))(image);
+    flip_image = tf.keras.layers.Lambda(lambda x: tf.cond(x[1], true_fn = lambda: tf.image.flip_left_right(x[0]), false_fn = lambda: x[0]))([crop_image, flip]);
+    final_bbox = tf.keras.layers.Lambda(lambda x: tf.cond(x[1], true_fn = lambda: x[0] * tf.cast([1,-1,1,-1], dtype = tf.float32) + tf.cast([0,1,0,1], dtype = tf.float32), false_fn = lambda: x[0]))([crop_bbox, flip]);
+    # 6) distort image in HSV color space
+    color_distort_image = tf.keras.layers.Lambda(lambda x: tf.image.random_hue(x, 10 / 180))(flip_image);
+    color_distort_image = tf.keras.layers.Lambda(lambda x: tf.image.random_saturation(x, 0, 10))(color_distort_image);
+    final_image = tf.keras.layers.Lambda(lambda x: tf.image.random_brightness(x, 10 / 255))(color_distort_image);
   else:
     resize_image = tf.keras.layers.Lambda(lambda x, h, w: tf.image.resize(x, (h, w), method = tf.image.ResizeMethod.BICUBIC, preserve_aspect_ratio = True), arguments = {'h': img_shape[1], 'w': img_shape[0]})(image); # resize_image.shape = (batch, nh, nw, 3)
     pad_image = tf.keras.layers.Lambda(lambda x, h, w: tf.pad(x, [[0,0],
@@ -74,6 +79,7 @@ def ExampleParser(augmentation = True, img_shape = (416, 416), jitter = .3, hue 
                                       arguments = {'h': img_shape[1], 'w': img_shape[0]})([resize_bbox, resize_image]);
     final_bbox = tf.keras.layers.Lambda(lambda x, h, w: x / tf.cast([[[h, w, h, w]]], dtype = tf.float32),
                                         arguments = {'h': img_shape[1], 'w': img_shape[0]})(pad_bbox);
+  final_image = tf.keras.layers.Lambda(lambda x: x / 255.)(final_image);
   return tf.keras.Model(inputs = (image, bbox), outputs = (final_image, final_bbox));
 
 def bbox_to_tensor(img_shape, num_classes = 80):
@@ -146,12 +152,8 @@ def bbox_to_tensor(img_shape, num_classes = 80):
   level3_gt = tf.keras.layers.Lambda(lambda x, h, w, c: tf.scatter_nd(updates = x[0], indices = x[1], shape = (h // 8, w // 8, 3, 5 + c)), arguments = {'h': img_shape[1], 'w': img_shape[0], 'c': num_classes})([level3_outputs, level3_coords]); # level3_gt.shape = (h//8, w//8, 3, 5+c)
   return tf.keras.Model(inputs = (bbox, labels), outputs = (level1_gt, level2_gt, level3_gt));
 
-def parse_function_generator(num_classes, input_shape = (416,416), random = False, jitter = .3, hue = .1, sat = 1.5, bri = .1):
-  assert 0 < jitter < 1;
-  assert -1 < hue < 1;
-  assert 0 < sat;
-  assert 0 < bri < 1;
-  def parse_function_noaug(serialized_example):
+def parse_function_generator(num_classes, input_shape = (416,416), random = True):
+  def parse_function(serialized_example):
     feature = tf.io.parse_single_example(
       serialized_example,
       features = {
@@ -166,44 +168,17 @@ def parse_function_generator(num_classes, input_shape = (416,416), random = Fals
     bbox = tf.reshape(bbox, (obj_num, 4));
     label = tf.sharse.to_dense(feature['label'], default_value = 0);
     label = tf.reshape(label, (obj_num));
-    # scale the input image to make the wider edge fit the input shape
-    # NOTE: I don't use resize_with_pad because it can only stuff zeros, but I want 128
-    resize_image = tf.image.resize(image, input_shape, method = tf.image.ResizeMethod.BICUBIC, preserve_aspect_ratio = True);
-    resize_shape = resize_image.shape[1:3]; #(height, width)
-    top_pad = (input_shape[0] - resize_shape[0]) // 2;
-    bottom_pad = input_shape[0] - resize_shape[0] - top_pad;
-    left_pad = (input_shape[1] - resize_shape[1]) // 2;
-    right_pad = input_shape[1] - resize_shape[1] - left_pad;
-    resize_image = tf.pad(resize_image, [[0,0], [top_pad,bottom_pad], [left_pad,right_pad], [0,0]], constant_values = 128);
-    # cast to float32
-    image_data = tf.cast(resize_image, tf.float32) / 255.; # image_data.shape = (h, w, 3)
-    # correct boxes
-    bbox = bbox * tf.constant([resize_shape[0], resize_shape[1], resize_shape[0], resize_shape[1]], dtype = tf.float32);
-    bbox = bbox + tf.constant([top_pad, left_pad, top_pad, left_pad], dtype = tf.float32);
-    bbox = bbox / tf.constant([input_shape[0], input_shape[1], input_shape[0], input_shape[1]], dtype = tf.float32); # bbox.shape = (obj_num, 4)
-    # return
-    return image_data, bbox;
-    
-    
-    image, label1, label2, label3 = tf.py_function(map_function_impl_generator(num_classes), inp = [image, bbox, label], Tout = [tf.float32, tf.float32, tf.float32, tf.float32]);
-    return image, (label1, label2, label3);
-  def parse_function_aug(serialized_example):
-    feature = tf.io.parse_single_example(
-      serialized_example,
-      features = {
-        'image': tf.io.FixedLenFeature((), dtype = tf.string),
-        'bbox': tf.io.VarLenFeature(dtype = tf.float32),
-        'label': tf.io.VarLenFeature(dtype = tf.int64),
-        'obj_num': tf.io.FixedLenFeature((), dtype = tf.int64)
-      });
-    obj_num = tf.cast(feature['obj_num'], dtype = tf.int32);
-    image = tf.io.decode_jpeg(feature['image']);
-    bbox = tf.sparse.to_dense(feature['bbox'], default_value = 0);
-    bbox = tf.reshape(bbox, (obj_num, 4));
-    label = tf.sharse.to_dense(feature['label'], default_value = 0);
-    label = tf.reshape(label, (obj_num));
-    
-  return parse_function_noaug if random == False else parse_function_aug;
+    # add batch dimension
+    image = tf.expand_dims(image, axis = 0);
+    bbox = tf.expand_dims(bbox, axis = 0);
+    # augmentation
+    image, bbox = ExampleParser(augmentation = random, img_shape = input_shape)([image, bbox]);
+    image = tf.squeeze(image, axis = 0);
+    bbox = tf.squeeze(bbox, axis = 0);
+    # generate label tensors
+    level1, level2, level3 = bbox_to_tensor([bbox, label]);
+    return image, (level1, level2, level3);
+  return parse_function;
 
 def create_dataset(image_dir, label_dir, trainset = True):
 
