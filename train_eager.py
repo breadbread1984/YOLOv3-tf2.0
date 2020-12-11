@@ -4,7 +4,6 @@ import os;
 import numpy as np;
 import cv2;
 import tensorflow as tf;
-import tensorflow_datasets as tfds;
 from YOLOv3 import YOLOv3, Loss;
 from Predictor import Predictor;
 from create_dataset import parse_function_generator;
