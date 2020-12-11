@@ -34,7 +34,7 @@ def ExampleParser(augmentation = True, img_shape = (416, 416), jitter = .3):
     # 2) try to calculate crop along height direction
     # NOTE: if img_shape[1] = 416 < resize_shape[0], the above pad operations are not processed.
     crop = tf.keras.layers.Lambda(lambda x, h: tf.math.maximum(x[0] - h, 0), arguments = {'h': img_shape[1]})(resize_shape);
-    offset_height = tf.keras.layers.Lambda(tf.random.uniform(maxval = tf.math.maximum(x[0], x[1]) + 1, dtype = tf.int32, shape = ()))([pad, crop]);
+    offset_height = tf.keras.layers.Lambda(lambda x: tf.random.uniform(maxval = tf.math.maximum(x[0], x[1]) + 1, dtype = tf.int32, shape = ()))([pad, crop]);
     resize_shape = tf.keras.layers.Lambda(lambda x: x[0] + tf.cast([2 * x[1], 0], dtype = tf.int32))([resize_shape, pad]);
     # 3) try to pad along width direction
     pad = tf.keras.layers.Lambda(lambda x, w: tf.math.maximum(w - x[1], 0), arguments = {'w': img_shape[0]})(resize_shape);
