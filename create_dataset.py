@@ -235,8 +235,9 @@ def worker(filename, anno, image_dir, image_ids):
 if __name__ == "__main__":
 
   from sys import argv;
-  if len(argv) != 2:
-    print("Usage: " + argv[0] + " <path/to/annotation>");
+  if len(argv) != 4:
+    print("Usage: " + argv[0] + "<train image dir> <test image dir> <anno dir>");
     exit(1);
   assert tf.executing_eagerly() == True;
-  main(argv[1]);
+  create_dataset(argv[2], argv[3], False);
+  create_dataset(argv[1], argv[3], True);
