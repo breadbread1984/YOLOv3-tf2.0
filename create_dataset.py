@@ -225,7 +225,7 @@ def worker(filename, anno, image_dir, image_ids):
       feature = {
         'image': tf.train.Feature(bytes_list = tf.train.BytesList(value = [tf.io.encode_jpeg(img).numpy()])),
         'bbox': tf.train.Feature(float_list = tf.train.FloatList(value = tf.reshape(bbox, (-1)))),
-        'label': tf.train.Feature(int64_list = tf.train.Int64List(value = tf.reshape(label,(-1)))),
+        'label': tf.train.Feature(int64_list = tf.train.Int64List(value = tf.reshape(labels,(-1)))),
         'obj_num': tf.train.Feature(int64_list = tf.train.Int64List(value = [bbox.shape[0]]))
       }
     ));
