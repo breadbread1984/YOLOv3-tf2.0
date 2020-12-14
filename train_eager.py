@@ -37,7 +37,7 @@ def main():
   # tensorboard summary
   log = tf.summary.create_file_writer('checkpoints');
   # train model
-  for True:
+  while True:
     images, labels = next(trainset_iter);
     with tf.GradientTape() as tape:
       outputs = yolov3(images);
