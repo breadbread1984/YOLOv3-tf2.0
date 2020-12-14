@@ -4,7 +4,7 @@ import os;
 import numpy as np;
 import cv2;
 import tensorflow as tf;
-from YOLOv3 import YOLOv3, Loss;
+from models import YOLOv3, Loss;
 from Predictor import Predictor;
 from create_dataset import parse_function_generator;
 
@@ -18,26 +18,25 @@ def main():
   # yolov3 model
   yolov3 = YOLOv3((416,416,3), 80);
   yolov3_loss = Loss((416,416,3), 80);
-  # load downloaded dataset
-  trainset = tfds.load(name = "coco2014", split = tfds.Split.TRAIN, download = False);
-  trainset = trainset.map(parse_function_generator(80)).repeat(100).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
-  validationset = tfds.load(name = "coco2014", split = tfds.Split.VALIDATION, download = False);
-  validationset_iter = validationset.map(parse_function_generator(80)).repeat(100).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE).__iter__();
-  testset = tfds.load(name = "coco2014", split = tfds.Split.TEST, download = False); # without label
-  testset = testset.repeat(100).prefetch(tf.data.experimental.AUTOTUNE);
-  testset_iter = testset.__iter__();
-  # restore from existing checkpoint
   optimizer = tf.keras.optimizers.Adam(1e-4);
-  if False == os.path.exists('checkpoints'): os.mkdir('checkpoints');
   checkpoint = tf.train.Checkpoint(model = yolov3, optimizer = optimizer, optimizer_step = optimizer.iterations);
+  train_loss = tf.keras.metrics.Mean(name = 'train loss', dtype = tf.float32);
+  test_loss = tf.keras.metrics.Mean(name = 'test loss', dtype = tf.float32);
+  # load downloaded dataset
+  trainset_filenames = [join('trainset', filename) for filename in listdir('trainset')];
+  testset_filenames = [join('testset', filename) for filename in listdir('testset')];
+  trainset = tf.data.TFRecordDataset(trainset_filenames).map(parse_function_generator(80)).repeat(-1).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
+  testset = tf.data.TFRecordDataset(testset_filenames).map(parse_function_generator(80)).repeat(-1).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
+  trainset_iter = iter(trainset);
+  testset_iter = iter(testset);
+  # restore from existing checkpoint
+  if False == os.path.exists('checkpoints'): os.mkdir('checkpoints');
   checkpoint.restore(tf.train.latest_checkpoint('checkpoints'));
   # tensorboard summary
   log = tf.summary.create_file_writer('checkpoints');
   # train model
-  print("training...");
-  train_loss = tf.keras.metrics.Mean(name = 'train loss', dtype = tf.float32);
-  validation_loss = tf.keras.metrics.Mean(name = 'validation loss', dtype = tf.float32);
-  for images, labels in trainset:
+  for True:
+    images, labels = next(trainset_iter);
     with tf.GradientTape() as tape:
       outputs = yolov3(images);
       loss = yolov3_loss([*outputs, *labels]);
@@ -45,39 +44,31 @@ def main():
     if tf.math.reduce_any(tf.math.is_nan(loss)) == True:
       print("NaN was detected in loss, skip the following steps!");
       continue;
-    train_loss.update_state(loss);
-    # write log
-    if tf.equal(optimizer.iterations % 10, 0):
-      with log.as_default():
-        tf.summary.scalar('train loss',train_loss.result(), step = optimizer.iterations);
-      train_loss.reset_states();
     grads = tape.gradient(loss, yolov3.trainable_variables);
     # check whether the grad numerics is correct
     if tf.math.reduce_any([tf.math.reduce_any(tf.math.is_nan(grad)) for grad in grads]) == True:
       print("NaN was detected in gradients, skip gradient apply!");
       continue;
     optimizer.apply_gradients(zip(grads, yolov3.trainable_variables));
+    train_loss.update_state(loss);
     # save model
-    if tf.equal(optimizer.iterations % 2000, 0):
+    if tf.equal(optimizer.iterations % 10000, 0):
       # save checkpoint every 1000 steps
       checkpoint.save(os.path.join('checkpoints','ckpt'));
       yolov3.save('yolov3.h5');
-    # eval on testset
     if tf.equal(optimizer.iterations % 100, 0):
-      # validate with latest model
-      print("validating on validation set...");
+      # evaluate
       for i in range(10):
-        images, labels = next(validationset_iter);
+        images, labels = next(testset_iter);
         outputs = yolov3(images);
         loss = yolov3_loss([*outputs, *labels]);
-        # NOTE: validation loss is not important, numeric validity is not checked
-        validation_loss.update_state(loss);
+        test_loss.update_state(loss);
+      # write log
       with log.as_default():
-        tf.summary.scalar('validation loss', validation_loss.result(), step = optimizer.iterations);
-      validation_loss.reset_states();
+        tf.summary.scalar('train loss', train_loss.result(), step = optimizer.iterations);
+        tf.summary.scalar('test loss', test_loss.result(), step = optimizer.iterations);
       # evaluate evey 1000 steps
-      print("testing on test set...");
-      features = next(testset_iter);
+      # TODO
       img = features["image"].numpy().astype('uint8');
       predictor = Predictor(yolov3 = yolov3);
       boundings = predictor.predict(img);
