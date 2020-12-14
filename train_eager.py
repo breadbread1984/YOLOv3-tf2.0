@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 from os import environ, mkdir, listdir;
+from os.path import join, exists;
 import numpy as np;
 import cv2;
 import tensorflow as tf;
