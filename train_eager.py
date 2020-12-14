@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import os;
+from os import environ, mkdir, listdir;
 import numpy as np;
 import cv2;
 import tensorflow as tf;
@@ -8,9 +8,9 @@ from models import YOLOv3, Loss;
 from Predictor import Predictor;
 from create_dataset import parse_function_generator, parse_function;
 
-os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1';
-#os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3';
-#os.environ['CUDA_VISIBLE_DEVICES'] = '';
+environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1';
+#environ['TF_CPP_MIN_VLOG_LEVEL'] = '3';
+#environ['CUDA_VISIBLE_DEVICES'] = '';
 batch_size = 8; # images of different sizes can't be stack into a batch
 
 def main():
