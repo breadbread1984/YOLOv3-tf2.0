@@ -166,7 +166,7 @@ def parse_function_generator(num_classes, input_shape = (416,416), random = True
     image = tf.io.decode_jpeg(feature['image']);
     bbox = tf.sparse.to_dense(feature['bbox'], default_value = 0);
     bbox = tf.reshape(bbox, (obj_num, 4));
-    label = tf.sharse.to_dense(feature['label'], default_value = 0);
+    label = tf.sparse.to_dense(feature['label'], default_value = 0);
     label = tf.reshape(label, (obj_num));
     # add batch dimension
     image = tf.expand_dims(image, axis = 0);
@@ -179,6 +179,24 @@ def parse_function_generator(num_classes, input_shape = (416,416), random = True
     level1, level2, level3 = bbox_to_tensor(img_shape = input_shape, num_classes = num_classes)([bbox, label]);
     return image, (level1, level2, level3);
   return parse_function;
+
+def parse_function(serialized_example):
+  
+  feature = tf.io.parse_single_example(
+    serialized_example,
+    features = {
+      'image': tf.io.FixedLenFeature((), dtype = tf.string),
+      'bbox': tf.io.VarLenFeature(dtype = tf.float32),
+      'label': tf.io.VarLenFeature(dtype = tf.int64),
+      'obj_num': tf.io.FixedLenFeature((), dtype = tf.int64)
+    });
+  obj_num = tf.cast(feature['obj_num'], dtype = tf.int32);
+  image = tf.io.decode_jpeg(feature['image']);
+  bbox = tf.sparse.io_dense(feature['bbox'], default_value = 0);
+  bbox = tf.reshape(bbox, (obj_num, 4));
+  label = tf.sparse.io_dense(feature['label'], default_value = 0);
+  label = tf.reshape(label, [obj_num]);
+  return image, bbox, label;
 
 def create_dataset(image_dir, label_dir, trainset = True):
 
