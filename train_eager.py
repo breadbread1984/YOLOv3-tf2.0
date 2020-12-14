@@ -6,7 +6,7 @@ import cv2;
 import tensorflow as tf;
 from models import YOLOv3, Loss;
 from Predictor import Predictor;
-from create_dataset import parse_function_generator;
+from create_dataset import parse_function_generator, parse_function;
 
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1';
 #os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3';
@@ -27,8 +27,10 @@ def main():
   testset_filenames = [join('testset', filename) for filename in listdir('testset')];
   trainset = tf.data.TFRecordDataset(trainset_filenames).map(parse_function_generator(80)).repeat(-1).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
   testset = tf.data.TFRecordDataset(testset_filenames).map(parse_function_generator(80)).repeat(-1).shuffle(batch_size).batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE);
+  validationset = tf.data.TFRecordDataset(testset_filenames).map(parse_function).repeat(-1);
   trainset_iter = iter(trainset);
   testset_iter = iter(testset);
+  validationset_iter = iter(validationset);
   # restore from existing checkpoint
   if False == os.path.exists('checkpoints'): os.mkdir('checkpoints');
   checkpoint.restore(tf.train.latest_checkpoint('checkpoints'));
@@ -59,30 +61,35 @@ def main():
     if tf.equal(optimizer.iterations % 100, 0):
       # evaluate
       for i in range(10):
-        images, labels = next(testset_iter);
+        images, labels = next(testset_iter); # images.shape = (b, h, w, 3)
         outputs = yolov3(images);
         loss = yolov3_loss([*outputs, *labels]);
         test_loss.update_state(loss);
-      # write log
-      with log.as_default():
-        tf.summary.scalar('train loss', train_loss.result(), step = optimizer.iterations);
-        tf.summary.scalar('test loss', test_loss.result(), step = optimizer.iterations);
-      # evaluate evey 1000 steps
-      # TODO
-      img = features["image"].numpy().astype('uint8');
+      # visualize
+      image, bbox, labels = next(validationset_iter); # image.shape = (h, w, 3)
+      image = image.numpy().astype('uint8');
       predictor = Predictor(yolov3 = yolov3);
-      boundings = predictor.predict(img);
+      boundings = predictor.predict(image);
       color_map = dict();
       for bounding in boundings:
         if bounding[5].numpy().astype('int32') in color_map:
           clr = color_map[bounding[5].numpy().astype('int32')];
         else:
-          color_map[bounding[5].numpy().astype('int32')] = tuple(np.random.randint(low=0, high=256,size=(3,)).tolist());
+          color_map[bounding[5].numpy().astype('int32')] = tuple(np.random.randint(low = 0, high = 256, size = (3,)).tolist());
           clr = color_map[bounding[5].numpy().astype('int32')];
-        cv2.rectangle(img, tuple(bounding[0:2].numpy().astype('int32')), tuple(bounding[2:4].numpy().astype('int32')), clr, 5);
-      img = tf.expand_dims(img, axis = 0);
+        cv2.rectangle(image, tuple(bounding[0:2].numpy().astype('int32')), tuple(bounding[2:4].numpy().astype('int32')), clr, 5);
+      image = tf.expand_dims(image, axis = 0);
+      # write log
       with log.as_default():
-        tf.summary.image('detect', img, step = optimizer.iterations);
+        tf.summary.scalar('train loss', train_loss.result(), step = optimizer.iterations);
+        tf.summary.scalar('test loss', test_loss.result(), step = optimizer.iterations);
+        tf.summary.image('detect', image, step = optimizer.iterations);
+      print('Step #%d Train Loss: %.6f Test Loss: %.6f' % (train_loss.result(), test_loss.result()));
+      # break condition
+      if train_loss.result() < 0.01: break;
+      # reset
+      train_loss.reset_states();
+      test_loss.reset_states();
   yolov3.save('yolov3.h5');
 
 if __name__ == "__main__":
