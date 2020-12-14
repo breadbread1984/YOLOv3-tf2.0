@@ -167,7 +167,7 @@ def parse_function_generator(num_classes, input_shape = (416,416), random = True
     bbox = tf.sparse.to_dense(feature['bbox'], default_value = 0);
     bbox = tf.reshape(bbox, (obj_num, 4));
     label = tf.sparse.to_dense(feature['label'], default_value = 0);
-    label = tf.reshape(label, (obj_num));
+    label = tf.reshape(label, (obj_num,));
     # add batch dimension
     image = tf.expand_dims(image, axis = 0);
     bbox = tf.expand_dims(bbox, axis = 0);
