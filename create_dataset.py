@@ -239,7 +239,7 @@ def worker(filename, anno, image_dir, image_ids):
       labels.append(category);
     bboxs = tf.cast(tf.stack(bboxs, axis = 0), dtype = tf.float32); # bboxs.shape = (obj_num, 4)
     labels = tf.cast(tf.stack(labels, axis = 0), dtype = tf.int32); # labels.shape = (obj_num)
-    assert labels.shape[0] == bboxes.shape[0];
+    assert labels.shape[0] == bboxs.shape[0];
     trainsample = tf.train.Example(features = tf.train.Features(
       feature = {
         'image': tf.train.Feature(bytes_list = tf.train.BytesList(value = [tf.io.encode_jpeg(img).numpy()])),
