@@ -28,9 +28,9 @@ def ExampleParser(augmentation = True, img_shape = (416, 416), jitter = .3):
     # 1) try to pad along height direction
     pad = tf.keras.layers.Lambda(lambda x, h: tf.math.maximum(h - x[0], 0), arguments = {'h': img_shape[1]})(resize_shape);
     hpad_image = tf.keras.layers.Lambda(lambda x: tf.pad(x[0], [[0,0],[x[1],x[1]],[0,0],[0,0]], constant_values = 128))([resize_image, pad]);
-    hpad_bbox = tf.keras.layers.Lambda(lambda x: x[0] * tf.cast([x[1][0], x[1][1], x[1][0], x[1][1]], dtype = tf.float32))([bbox, resize_shape]);
-    hpad_bbox = tf.keras.layers.Lambda(lambda x: x[0] + tf.cast([x[1], 0, x[1], 0], dtype = tf.float32))([hpad_bbox, pad]);
-    hpad_bbox = tf.keras.layers.Lambda(lambda x: x[0] / tf.cast([x[1][0] + 2 * x[2], x[1][1], x[1][0] + 2 * x[2], x[1][1]], dtype = tf.float32))([hpad_bbox, resize_shape, pad]);
+    hpad_bbox = tf.keras.layers.Lambda(lambda x: x[0] * tf.cast([[x[1][0], x[1][1], x[1][0], x[1][1]]], dtype = tf.float32))([bbox, resize_shape]);
+    hpad_bbox = tf.keras.layers.Lambda(lambda x: x[0] + tf.cast([[x[1], 0, x[1], 0]], dtype = tf.float32))([hpad_bbox, pad]);
+    hpad_bbox = tf.keras.layers.Lambda(lambda x: x[0] / tf.cast([[x[1][0] + 2 * x[2], x[1][1], x[1][0] + 2 * x[2], x[1][1]]], dtype = tf.float32))([hpad_bbox, resize_shape, pad]);
     # 2) try to calculate crop along height direction
     # NOTE: if img_shape[1] = 416 < resize_shape[0], the above pad operations are not processed.
     crop = tf.keras.layers.Lambda(lambda x, h: tf.math.maximum(x[0] - h, 0), arguments = {'h': img_shape[1]})(resize_shape);
@@ -39,9 +39,9 @@ def ExampleParser(augmentation = True, img_shape = (416, 416), jitter = .3):
     # 3) try to pad along width direction
     pad = tf.keras.layers.Lambda(lambda x, w: tf.math.maximum(w - x[1], 0), arguments = {'w': img_shape[0]})(resize_shape);
     wpad_image = tf.keras.layers.Lambda(lambda x: tf.pad(x[0], [[0,0],[0,0],[x[1],x[1]],[0,0]], constant_values = 128))([hpad_image, pad]);
-    wpad_bbox = tf.keras.layers.Lambda(lambda x: x[0] * tf.cast([x[1][0], x[1][1], x[1][0], x[1][1]], dtype = tf.float32))([hpad_bbox, resize_shape]);
-    wpad_bbox = tf.keras.layers.Lambda(lambda x: x[0] + tf.cast([0, x[1], 0, x[1]], dtype = tf.float32))([wpad_bbox, pad]);
-    wpad_bbox = tf.keras.layers.Lambda(lambda x: x[0] / tf.cast([x[1][0], x[1][1] + 2 * x[2], x[1][0], x[1][1] + 2 * x[2]], dtype = tf.float32))([wpad_bbox, resize_shape, pad]);
+    wpad_bbox = tf.keras.layers.Lambda(lambda x: x[0] * tf.cast([[x[1][0], x[1][1], x[1][0], x[1][1]]], dtype = tf.float32))([hpad_bbox, resize_shape]);
+    wpad_bbox = tf.keras.layers.Lambda(lambda x: x[0] + tf.cast([[0, x[1], 0, x[1]]], dtype = tf.float32))([wpad_bbox, pad]);
+    wpad_bbox = tf.keras.layers.Lambda(lambda x: x[0] / tf.cast([[x[1][0], x[1][1] + 2 * x[2], x[1][0], x[1][1] + 2 * x[2]]], dtype = tf.float32))([wpad_bbox, resize_shape, pad]);
     # 4) try to calculate crop along width direction
     # NOTE: if img_shape[0] = 416 < resize_shape[1], the above pad operations are not processed.
     crop = tf.keras.layers.Lambda(lambda x, w: tf.math.maximum(x[1] - w, 0), arguments = {'w': img_shape[0]})(resize_shape);
@@ -49,9 +49,9 @@ def ExampleParser(augmentation = True, img_shape = (416, 416), jitter = .3):
     resize_shape = tf.keras.layers.Lambda(lambda x: x[0] + tf.cast([0, 2 * x[1]], dtype = tf.int32))([resize_shape, pad]);
     # 5) do the real crop operations
     crop_image = tf.keras.layers.Lambda(lambda x, h, w: tf.image.crop_to_bounding_box(x[0], x[1], x[2], h, w), arguments = {'h': img_shape[1], 'w': img_shape[0]})([wpad_image, offset_height, offset_width]);
-    crop_bbox = tf.keras.layers.Lambda(lambda x: x[0] * tf.cast([x[1][0], x[1][1], x[1][0], x[1][1]], dtype = tf.float32))([wpad_bbox, resize_shape]);
-    crop_bbox = tf.keras.layers.Lambda(lambda x: x[0] + tf.cast([-x[1], -x[2], -x[1], -x[2]], dtype = tf.float32))([crop_bbox, offset_height, offset_width]);
-    crop_bbox = tf.keras.layers.Lambda(lambda x, h, w: x[0] / tf.cast([h, w, h, w], dtype = tf.float32), arguments = {'h': img_shape[1], 'w': img_shape[0]})(crop_bbox);
+    crop_bbox = tf.keras.layers.Lambda(lambda x: x[0] * tf.cast([[x[1][0], x[1][1], x[1][0], x[1][1]]], dtype = tf.float32))([wpad_bbox, resize_shape]);
+    crop_bbox = tf.keras.layers.Lambda(lambda x: x[0] + tf.cast([[-x[1], -x[2], -x[1], -x[2]]], dtype = tf.float32))([crop_bbox, offset_height, offset_width]);
+    crop_bbox = tf.keras.layers.Lambda(lambda x, h, w: x[0] / tf.cast([[[h, w, h, w]]], dtype = tf.float32), arguments = {'h': img_shape[1], 'w': img_shape[0]})(crop_bbox);
     # 5) random flip image
     flip = tf.keras.layers.Lambda(lambda x: tf.math.less(np.random.rand(), 0.5))(image);
     flip_image = tf.keras.layers.Lambda(lambda x: tf.cond(x[1], true_fn = lambda: tf.image.flip_left_right(x[0]), false_fn = lambda: x[0]))([crop_image, flip]);
