@@ -237,15 +237,16 @@ def worker(filename, anno, image_dir, image_ids):
       category = label_map[ann['category_id']];
       assert category != -1;
       labels.append(category);
+    obj_num = len(bboxs);
     bboxs = tf.cast(tf.stack(bboxs, axis = 0), dtype = tf.float32); # bboxs.shape = (obj_num, 4)
     labels = tf.cast(tf.stack(labels, axis = 0), dtype = tf.int32); # labels.shape = (obj_num)
-    assert labels.shape[0] == bboxs.shape[0];
+    assert labels.shape[0] == bboxs.shape[0] and labels.shape[0] == obj_num;
     trainsample = tf.train.Example(features = tf.train.Features(
       feature = {
         'image': tf.train.Feature(bytes_list = tf.train.BytesList(value = [tf.io.encode_jpeg(img).numpy()])),
         'bbox': tf.train.Feature(float_list = tf.train.FloatList(value = tf.reshape(bbox, (-1)))),
         'label': tf.train.Feature(int64_list = tf.train.Int64List(value = tf.reshape(labels, (-1)))),
-        'obj_num': tf.train.Feature(int64_list = tf.train.Int64List(value = [bbox.shape[0]]))
+        'obj_num': tf.train.Feature(int64_list = tf.train.Int64List(value = [obj_num]))
       }
     ));
     writer.write(trainsample.SerializeToString());
