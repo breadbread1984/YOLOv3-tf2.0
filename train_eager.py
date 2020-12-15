@@ -33,7 +33,7 @@ def main():
   testset_iter = iter(testset);
   validationset_iter = iter(validationset);
   # restore from existing checkpoint
-  if False == os.path.exists('checkpoints'): os.mkdir('checkpoints');
+  if False == exists('checkpoints'): mkdir('checkpoints');
   checkpoint.restore(tf.train.latest_checkpoint('checkpoints'));
   # tensorboard summary
   log = tf.summary.create_file_writer('checkpoints');
