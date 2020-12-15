@@ -163,24 +163,21 @@ def parse_function_generator(num_classes, input_shape = (416,416), random = True
         'obj_num': tf.io.FixedLenFeature((), dtype = tf.int64)
       });
     obj_num = tf.cast(feature['obj_num'], dtype = tf.int32);
-    image = tf.cast(tf.io.decode_jpeg(feature['image']), dtype = tf.float32); # image.shape = (width, height, channel)
+    image = tf.io.decode_jpeg(feature['image']);
     bbox = tf.sparse.to_dense(feature['bbox'], default_value = 0);
-    bbox = tf.reshape(bbox, (obj_num, 4)); # bbox.shape = (obj_num, 4)
+    bbox = tf.reshape(bbox, (obj_num, 4));
     label = tf.sparse.to_dense(feature['label'], default_value = 0);
-    label = tf.reshape(label, (obj_num,)); # label.shape = (obj_num)
-    @tf.function
-    def preprocess(image, bbox, label):
-      # add batch dimension
-      image = tf.expand_dims(image, axis = 0); # image.shape = (1, width, height, channel)
-      bbox = tf.expand_dims(bbox, axis = 0); # bbox.shape = (1, obj_num, 4)
-      # augmentation
-      image, bbox = ExampleParser(augmentation = random, img_shape = input_shape)([image, bbox]);
-      image = tf.squeeze(image, axis = 0);
-      bbox = tf.squeeze(bbox, axis = 0);
-      # generate label tensors
-      level1, level2, level3 = bbox_to_tensor(img_shape = input_shape, num_classes = num_classes)([bbox, label]);
-      return image, (level1, level2, level3);
-    return preprocess(image, bbox, label);
+    label = tf.reshape(label, (obj_num,));
+    # add batch dimension
+    image = tf.expand_dims(image, axis = 0);
+    bbox = tf.expand_dims(bbox, axis = 0);
+    # augmentation
+    image, bbox = ExampleParser(augmentation = random, img_shape = input_shape)([image, bbox]);
+    image = tf.squeeze(image, axis = 0);
+    bbox = tf.squeeze(bbox, axis = 0);
+    # generate label tensors
+    level1, level2, level3 = bbox_to_tensor(img_shape = input_shape, num_classes = num_classes)([bbox, label]);
+    return image, (level1, level2, level3);
   return parse_function;
 
 def parse_function(serialized_example):
