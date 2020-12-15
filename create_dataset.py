@@ -192,9 +192,9 @@ def parse_function(serialized_example):
     });
   obj_num = tf.cast(feature['obj_num'], dtype = tf.int32);
   image = tf.io.decode_jpeg(feature['image']);
-  bbox = tf.sparse.io_dense(feature['bbox'], default_value = 0);
+  bbox = tf.sparse.to_dense(feature['bbox'], default_value = 0);
   bbox = tf.reshape(bbox, (obj_num, 4));
-  label = tf.sparse.io_dense(feature['label'], default_value = 0);
+  label = tf.sparse.to_dense(feature['label'], default_value = 0);
   label = tf.reshape(label, [obj_num]);
   return image, bbox, label;
 
