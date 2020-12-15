@@ -174,7 +174,7 @@ def parse_function_generator(num_classes, input_shape = (416,416), random = True
       image = tf.expand_dims(image, axis = 0); # image.shape = (1, width, height, channel)
       bbox = tf.expand_dims(bbox, axis = 0); # bbox.shape = (1, obj_num, 4)
       # augmentation
-      image, bbox = tf.keras.layerExampleParser(augmentation = random, img_shape = input_shape)([image, bbox]);
+      image, bbox = ExampleParser(augmentation = random, img_shape = input_shape)([image, bbox]);
       image = tf.squeeze(image, axis = 0);
       bbox = tf.squeeze(bbox, axis = 0);
       # generate label tensors
