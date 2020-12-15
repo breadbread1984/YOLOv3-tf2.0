@@ -57,7 +57,7 @@ def main():
     # save model
     if tf.equal(optimizer.iterations % 10000, 0):
       # save checkpoint every 1000 steps
-      checkpoint.save(os.path.join('checkpoints','ckpt'));
+      checkpoint.save(join('checkpoints','ckpt'));
       yolov3.save('yolov3.h5');
     if tf.equal(optimizer.iterations % 100, 0):
       # evaluate
