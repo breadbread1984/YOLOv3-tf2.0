@@ -94,8 +94,8 @@ def parse_function_generator(num_classes, img_shape = (416,416), random = True, 
       final_bbox = tf.keras.layers.Lambda(lambda x, h, w: x / tf.cast([[[h, w, h, w]]], dtype = tf.float32),
                                           arguments = {'h': img_shape[1], 'w': img_shape[0]})(pad_bbox);
     final_image = tf.keras.layers.Lambda(lambda x: x / 255.)(final_image);
-    image = tf.squeeze(final_image, axis = 0);
-    bbox = tf.squeeze(final_bbox, axis = 0);
+    image = tf.squeeze(final_image, axis = 0); # image.shape = (height, width, 3)
+    bbox = tf.squeeze(final_bbox, axis = 0); # bbox.shape = (obj_num, 4)
     # generate label tensors
     anchors = [[[116,90], [156,198], [373,326]], [[30,61], [62,45], [59,119]], [[10,13], [16,30], [33,23]]]; # anchors.shape = (level num = 3, anchor num = 3, 2)
     # 1) choose the best anchor box with the maximum of IOU with target bounding
@@ -226,7 +226,7 @@ def worker(filename, anno, image_dir, image_ids):
     trainsample = tf.train.Example(features = tf.train.Features(
       feature = {
         'image': tf.train.Feature(bytes_list = tf.train.BytesList(value = [tf.io.encode_jpeg(img).numpy()])),
-        'bbox': tf.train.Feature(float_list = tf.train.FloatList(value = tf.reshape(bbox, (-1)))),
+        'bbox': tf.train.Feature(float_list = tf.train.FloatList(value = tf.reshape(bboxs, (-1)))),
         'label': tf.train.Feature(int64_list = tf.train.Int64List(value = tf.reshape(labels, (-1)))),
         'obj_num': tf.train.Feature(int64_list = tf.train.Int64List(value = [obj_num]))
       }
