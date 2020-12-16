@@ -103,7 +103,7 @@ def parse_function_generator(num_classes, img_shape = (416,416), random = True):
     image = tf.expand_dims(image, axis = 0);
     bbox = tf.expand_dims(bbox, axis = 0);
     # augmentation
-    if augmentation == True:
+    if random == True:
       aspect_ratio_jitter = tf.keras.layers.Lambda(lambda x, j: tf.random.uniform(shape = (2,), minval = 1 - j, maxval = 1 + j, dtype = tf.float32), arguments = {'j': jitter})(image); # aspect_ratio_jitter.shape = (2)
       resize_input_shape = tf.keras.layers.Lambda(lambda x, h, w: tf.cast([h, w], dtype = tf.float32) * x, arguments = {'h': img_shape[1], 'w': img_shape[0]})(aspect_ratio_jitter); # resize_input_shape.shape = (2) in sequence of (h, w)
       scale = tf.keras.layers.Lambda(lambda x: tf.random.uniform(shape = (1,), minval = .8, maxval = 1.2, dtype = tf.float32))(image); # scale.shape = (1)
