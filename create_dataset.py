@@ -83,7 +83,7 @@ def bbox_to_tensor(img_shape, num_classes = 80):
   level3_gt = tf.keras.layers.Lambda(lambda x, h, w, c: tf.scatter_nd(updates = x[0], indices = x[1], shape = (h // 8, w // 8, 3, 5 + c)), arguments = {'h': img_shape[1], 'w': img_shape[0], 'c': num_classes})([level3_outputs, level3_coords]); # level3_gt.shape = (h//8, w//8, 3, 5+c)
   return tf.keras.Model(inputs = (bbox, labels), outputs = (level1_gt, level2_gt, level3_gt));
 
-def parse_function_generator(num_classes, img_shape = (416,416), random = True):
+def parse_function_generator(num_classes, img_shape = (416,416), random = True, jitter = .3):
   def parse_function(serialized_example):
     feature = tf.io.parse_single_example(
       serialized_example,
