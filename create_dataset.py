@@ -243,7 +243,24 @@ if __name__ == "__main__":
   for image, labels in trainset:
     image = image * 255.; # image.shape = (416, 416, 3)
     labels1, labels2, labels3 = labels; # labels1.shape = (13, 13, 3, 85) labels2.shape = (26, 26, 3, 85) labels3.shape = (52, 52, 3, 85)
-    
+    mask1 = tf.math.equal(labels1[..., 4], 1); # mask1.shape = (13, 13, 3)
+    mask2 = tf.math.equal(labels2[..., 4], 1); # mask2.shape = (26, 26, 3)
+    mask3 = tf.math.equal(labels3[..., 4], 1); # msak3.shape = (52, 52, 3)
+    labels1 = tf.boolean_mask(labels1, mask1); # labels1.shape = (obj_num, 85)
+    labels2 = tf.boolean_mask(labels2, mask2); # labels2.shape = (obj_num, 85)
+    labels3 = tf.boolean_mask(labels3, mask3); # labels3.shape = (obj_num, 85)
+    bbox = tf.concat([labels1[..., 0:4], labels2[..., 0:4], labels3[..., 0:4]], axis = 0); # bbox.shape = (total obj num, 4) in sequence of (center x, y, w, h)
+    half_wh = bbox[..., 2:4] / 2;
+    upperleft = (bbox[..., 0:2] - half_wh) * tf.cast([tf.shape(image)[1], tf.shape(image)[0]], dtype = tf.float32); # upperleft.shape = (total obj num, 2)
+    bottomright = (bbox[..., 0:2] + half_wh) * tf.cast([tf.shape(image)[1], tf.shape(image)[0]], dtype = tf.float32); # bottomright.shape = (total obj num, 2)
+    bbox = tf.concat([upperleft, bottomright], axis = -1); # bbox.shape = (total obj num, 4)
+    for box in bbox:
+      img = image.numpy().astype('uint8');
+      ul = tuple(box[0:2].numpy().astype(int));
+      br = tuple(box[2:4].numpy().astype(int));
+      cv2.rectangle(img, ul, br, (0,255,0), 2);
+    cv2.imshow('objects', img);
+    cv2.waitKey();
   #'''
 
   from sys import argv;
