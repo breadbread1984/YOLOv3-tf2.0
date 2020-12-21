@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from os import mkdir;
+from os import mkdir, listdir;
 from os.path import join, exists;
 from shutil import rmtree;
 from math import ceil;
@@ -30,8 +30,8 @@ def parse_function_generator(num_classes, img_shape = (416,416), random = True, 
     labels = tf.sparse.to_dense(feature['label'], default_value = 0);
     labels = tf.reshape(labels, (obj_num,));
     # add batch dimension
-    image = tf.expand_dims(image, axis = 0);
-    bbox = tf.expand_dims(bbox, axis = 0);
+    image = tf.keras.layers.Lambda(lambda x: tf.expand_dims(x, axis = 0))(image);
+    bbox = tf.keras.layers.Lambda(lambda x: tf.expand_dims(x, axis = 0))(bbox);
     # augmentation
     if random == True:
       aspect_ratio_jitter = tf.keras.layers.Lambda(lambda x, j: tf.random.uniform(shape = (2,), minval = 1 - j, maxval = 1 + j, dtype = tf.float32), arguments = {'j': jitter})(image); # aspect_ratio_jitter.shape = (2)
@@ -94,8 +94,8 @@ def parse_function_generator(num_classes, img_shape = (416,416), random = True, 
       final_bbox = tf.keras.layers.Lambda(lambda x, h, w: x / tf.cast([[[h, w, h, w]]], dtype = tf.float32),
                                           arguments = {'h': img_shape[1], 'w': img_shape[0]})(pad_bbox);
     final_image = tf.keras.layers.Lambda(lambda x: x / 255.)(final_image);
-    image = tf.squeeze(final_image, axis = 0); # image.shape = (height, width, 3)
-    bbox = tf.squeeze(final_bbox, axis = 0); # bbox.shape = (obj_num, 4)
+    image = tf.keras.layers.Lambda(lambda x: tf.squeeze(x, axis = 0))(final_image); # image.shape = (height, width, 3)
+    bbox = tf.keras.layers.Lambda(lambda x: tf.squeeze(x, axis = 0))(final_bbox); # bbox.shape = (obj_num, 4)
     # generate label tensors
     anchors = [[[116,90], [156,198], [373,326]], [[30,61], [62,45], [59,119]], [[10,13], [16,30], [33,23]]]; # anchors.shape = (level num = 3, anchor num = 3, 2)
     # 1) choose the best anchor box with the maximum of IOU with target bounding
@@ -235,6 +235,16 @@ def worker(filename, anno, image_dir, image_ids):
   writer.close();
 
 if __name__ == "__main__":
+
+  #'''
+  # this code is for testing data augmentation
+  trainset_filenames = [join('trainset', filename) for filename in listdir('trainset')];
+  trainset = tf.data.TFRecordWriter(trainset_filenames).map(parse_function_generator(80));
+  for image, labels in trainset:
+    image = image * 255.; # image.shape = (416, 416, 3)
+    labels1, labels2, labels3 = labels; # labels1.shape = (13, 13, 3, 85) labels2.shape = (26, 26, 3, 85) labels3.shape = (52, 52, 3, 85)
+    
+  #'''
 
   from sys import argv;
   if len(argv) != 4:
