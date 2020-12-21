@@ -81,7 +81,7 @@ def parse_function_generator(num_classes, img_shape = (416,416), random = True, 
                                                                     [(w - tf.shape(x)[2])//2, (w - tf.shape(x)[2]) - (w - tf.shape(x)[2])//2],
                                                                     [0,0]], constant_values = 128), 
                                         arguments = {'h': img_shape[1], 'w': img_shape[0]})(resize_image); # resize_image.shape = (batch, 416, 416, 3)
-      final_image = tf.keras.layers.Lambda(lambda x: tf.cast(x, tf.float32) / 255.)(pad_image); # image_data.shape = (batch, 416, 416, 3)
+      final_image = tf.keras.layers.Lambda(lambda x: tf.cast(x, tf.float32))(pad_image); # image_data.shape = (batch, 416, 416, 3)
       resize_bbox = tf.keras.layers.Lambda(lambda x: x[0] * tf.cast([[[tf.shape(x[1])[1], 
                                                                       tf.shape(x[1])[2], 
                                                                       tf.shape(x[1])[1], 
@@ -239,7 +239,7 @@ if __name__ == "__main__":
   #'''
   # this code is for testing data augmentation
   trainset_filenames = [join('testset', filename) for filename in listdir('testset')];
-  trainset = tf.data.TFRecordDataset(trainset_filenames).map(parse_function_generator(80));
+  trainset = tf.data.TFRecordDataset(trainset_filenames).map(parse_function_generator(80, random = False));
   for image, labels in trainset:
     image = image * 255.; # image.shape = (416, 416, 3)
     labels1, labels2, labels3 = labels; # labels1.shape = (13, 13, 3, 85) labels2.shape = (26, 26, 3, 85) labels3.shape = (52, 52, 3, 85)
