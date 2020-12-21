@@ -239,7 +239,7 @@ if __name__ == "__main__":
   #'''
   # this code is for testing data augmentation
   trainset_filenames = [join('trainset', filename) for filename in listdir('trainset')];
-  trainset = tf.data.TFRecordWriter(trainset_filenames).map(parse_function_generator(80));
+  trainset = tf.data.TFRecordDataset(trainset_filenames).map(parse_function_generator(80));
   for image, labels in trainset:
     image = image * 255.; # image.shape = (416, 416, 3)
     labels1, labels2, labels3 = labels; # labels1.shape = (13, 13, 3, 85) labels2.shape = (26, 26, 3, 85) labels3.shape = (52, 52, 3, 85)
