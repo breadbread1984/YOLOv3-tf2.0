@@ -261,6 +261,7 @@ if __name__ == "__main__":
       cv2.rectangle(img, ul, br, (0,255,0), 2);
     cv2.imshow('objects', img);
     cv2.waitKey();
+  exit(0);
   #'''
 
   from sys import argv;
