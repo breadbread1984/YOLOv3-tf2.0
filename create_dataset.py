@@ -238,7 +238,7 @@ if __name__ == "__main__":
 
   #'''
   # this code is for testing data augmentation
-  trainset_filenames = [join('trainset', filename) for filename in listdir('trainset')];
+  trainset_filenames = [join('testset', filename) for filename in listdir('testset')];
   trainset = tf.data.TFRecordDataset(trainset_filenames).map(parse_function_generator(80));
   for image, labels in trainset:
     image = image * 255.; # image.shape = (416, 416, 3)
@@ -254,8 +254,8 @@ if __name__ == "__main__":
     upperleft = (bbox[..., 0:2] - half_wh) * tf.cast([tf.shape(image)[1], tf.shape(image)[0]], dtype = tf.float32); # upperleft.shape = (total obj num, 2)
     bottomright = (bbox[..., 0:2] + half_wh) * tf.cast([tf.shape(image)[1], tf.shape(image)[0]], dtype = tf.float32); # bottomright.shape = (total obj num, 2)
     bbox = tf.concat([upperleft, bottomright], axis = -1); # bbox.shape = (total obj num, 4)
+    img = image.numpy().astype('uint8');
     for box in bbox:
-      img = image.numpy().astype('uint8');
       ul = tuple(box[0:2].numpy().astype(int));
       br = tuple(box[2:4].numpy().astype(int));
       cv2.rectangle(img, ul, br, (0,255,0), 2);
