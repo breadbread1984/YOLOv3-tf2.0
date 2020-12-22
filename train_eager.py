@@ -19,7 +19,7 @@ def main():
   # yolov3 model
   yolov3 = YOLOv3((416,416,3), 80);
   yolov3_loss = Loss((416,416,3), 80);
-  optimizer = tf.keras.optimizers.Adam(1e-4);
+  optimizer = tf.keras.optimizers.Adam(tf.keras.optimizers.schedules.ExponentialDecay(1e-4, decay_steps = 110000, decay_rate = 0.99));
   checkpoint = tf.train.Checkpoint(model = yolov3, optimizer = optimizer, optimizer_step = optimizer.iterations);
   train_loss = tf.keras.metrics.Mean(name = 'train loss', dtype = tf.float32);
   test_loss = tf.keras.metrics.Mean(name = 'test loss', dtype = tf.float32);
@@ -84,7 +84,7 @@ def main():
       with log.as_default():
         tf.summary.scalar('train loss', train_loss.result(), step = optimizer.iterations);
         tf.summary.scalar('test loss', test_loss.result(), step = optimizer.iterations);
-        tf.summary.image('detect', image, step = optimizer.iterations);
+        tf.summary.image('detect', image[...,::-1], step = optimizer.iterations);
       print('Step #%d Train Loss: %.6f Test Loss: %.6f' % (optimizer.iterations, train_loss.result(), test_loss.result()));
       # break condition
       if train_loss.result() < 0.01: break;
