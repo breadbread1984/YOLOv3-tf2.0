@@ -12,7 +12,7 @@ from create_dataset import parse_function_generator, parse_function;
 environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1';
 #environ['TF_CPP_MIN_VLOG_LEVEL'] = '3';
 #environ['CUDA_VISIBLE_DEVICES'] = '';
-batch_size = 8; # images of different sizes can't be stack into a batch
+batch_size = 12; # images of different sizes can't be stack into a batch
 
 def main():
 
