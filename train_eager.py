@@ -85,7 +85,7 @@ def main():
         tf.summary.scalar('train loss', train_loss.result(), step = optimizer.iterations);
         tf.summary.scalar('test loss', test_loss.result(), step = optimizer.iterations);
         tf.summary.image('detect', image, step = optimizer.iterations);
-      print('Step #%d Train Loss: %.6f Test Loss: %.6f' % (train_loss.result(), test_loss.result()));
+      print('Step #%d Train Loss: %.6f Test Loss: %.6f' % (optimizer.iterations, train_loss.result(), test_loss.result()));
       # break condition
       if train_loss.result() < 0.01: break;
       # reset
