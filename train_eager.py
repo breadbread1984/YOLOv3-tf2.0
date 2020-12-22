@@ -87,7 +87,7 @@ def main():
         tf.summary.image('detect', image[...,::-1], step = optimizer.iterations);
       print('Step #%d Train Loss: %.6f Test Loss: %.6f' % (optimizer.iterations, train_loss.result(), test_loss.result()));
       # break condition
-      if train_loss.result() < 0.01: break;
+      if train_loss.result() < 0.001: break;
       # reset
       train_loss.reset_states();
       test_loss.reset_states();
