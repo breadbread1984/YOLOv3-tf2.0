@@ -243,7 +243,7 @@ def worker(filename, anno, image_dir, image_ids):
 
 if __name__ == "__main__":
 
-  #'''
+  '''
   # this code is for testing data augmentation
   trainset_filenames = [join('testset', filename) for filename in listdir('testset')];
   trainset = tf.data.TFRecordDataset(trainset_filenames).map(parse_function_generator(80));
@@ -269,7 +269,7 @@ if __name__ == "__main__":
     cv2.imshow('objects', img);
     cv2.waitKey();
   exit(0);
-  #'''
+  '''
 
   from sys import argv;
   if len(argv) != 4:
