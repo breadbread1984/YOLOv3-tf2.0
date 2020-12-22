@@ -23,12 +23,12 @@ def parse_function_generator(num_classes, img_shape = (416,416), random = True, 
         'label': tf.io.VarLenFeature(dtype = tf.int64),
         'obj_num': tf.io.FixedLenFeature((), dtype = tf.int64)
       });
-    obj_num = tf.cast(feature['obj_num'], dtype = tf.int32);
-    image = tf.io.decode_jpeg(feature['image']);
-    bbox = tf.sparse.to_dense(feature['bbox'], default_value = 0);
-    bbox = tf.reshape(bbox, (obj_num, 4));
-    labels = tf.sparse.to_dense(feature['label'], default_value = 0);
-    labels = tf.reshape(labels, (obj_num,));
+    obj_num = tf.keras.layers.Lambda(lambda x: tf.cast(x, dtype = tf.int32))(feature['obj_num']);
+    image = tf.keras.layers.Lambda(lambda x: tf.io.decode_jpeg(x))(feature['image']);
+    bbox = tf.keras.layers.Lambda(lambda x: tf.sparse.to_dense(x, default_value = 0))(feature['bbox']);
+    bbox = tf.keras.layers.Lambda(lambda x: tf.reshape(x[0], (x[1], 4)))([bbox, obj_num]);
+    labels = tf.keras.layers.Lambda(lambda x: tf.sparse.to_dense(x, default_value = 0))(feature['label']);
+    labels = tf.keras.layers.Lambda(lambda x: tf.reshape(x[0], (x[1],)))([labels, obj_num]);
     # add batch dimension
     image = tf.keras.layers.Lambda(lambda x: tf.expand_dims(x, axis = 0))(image);
     bbox = tf.keras.layers.Lambda(lambda x: tf.expand_dims(x, axis = 0))(bbox);
@@ -68,7 +68,7 @@ def parse_function_generator(num_classes, img_shape = (416,416), random = True, 
       # 4) try to calculate crop along width direction
       crop = tf.keras.layers.Lambda(lambda x, w: tf.math.maximum(x[1] - w, 0), arguments = {'w': img_shape[0]})(resize_shape);
       crop_left = tf.keras.layers.Lambda(lambda x: tf.random.uniform(maxval = x + 1, shape = (), dtype = tf.int32))(crop);
-      wcrop_image = tf.keras.layers.Lambda(lambda x, w: tf.image.crop_to_bounding_box(x[0], 0, x[1], tf.shape(x[0])[1], w), arguments = {'w': image_shape[0]})([wpad_image, crop_left]);
+      wcrop_image = tf.keras.layers.Lambda(lambda x, w: tf.image.crop_to_bounding_box(x[0], 0, x[1], tf.shape(x[0])[1], w), arguments = {'w': img_shape[0]})([wpad_image, crop_left]);
       wcrop_bbox = tf.keras.layers.Lambda(lambda x: x[0] * tf.cast([[x[1][0], x[1][1], x[1][0], x[1][1]]], dtype = tf.float32))([wpad_bbox, resize_shape]);
       wcrop_bbox = tf.keras.layers.Lambda(lambda x: x[0] - tf.cast([[0, x[1], 0, x[1]]], dtype = tf.float32))([wcrop_bbox, crop_left]);
       wcrop_bbox = tf.keras.layers.Lambda(lambda x: x[0] / tf.cast([[x[1][0], x[1][1] - x[2], x[1][0], x[1][1] - x[2]]], dtype = tf.float32))([wcrop_bbox, resize_shape, crop]);
