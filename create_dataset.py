@@ -224,8 +224,9 @@ def worker(filename, anno, image_dir, image_ids):
       bboxs.append(bbox);
       # category
       category = label_map[ann['category_id']];
-      assert category != -1;
-      labels.append(category);
+      assert category != -1 and category != 0; # can't be not presented category (-1) can't be background category (0)
+      labels.append(category - 1);
+      assert 0 <= labels[-1] <= 79;
     obj_num = len(bboxs);
     bboxs = tf.cast(tf.stack(bboxs, axis = 0), dtype = tf.float32); # bboxs.shape = (obj_num, 4)
     labels = tf.cast(tf.stack(labels, axis = 0), dtype = tf.int32); # labels.shape = (obj_num)
