@@ -9,12 +9,14 @@ from create_dataset import parse_function_generator, parse_function;
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1';
 #os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3';
 #os.environ['CUDA_VISIBLE_DEVICES'] = '';
-batch_size = 8; # images of different sizes can't be stack into a batch
+batch_size = 12; # images of different sizes can't be stack into a batch
 
 def main():
 
+  strategy = tf.distribute.MirroredStrategy();
   # yolov3 model
-  yolov3 = YOLOv3((416,416,3,), 80);
+  with strategy.scope():
+    yolov3 = YOLOv3((416,416,3,), 80);
   @tf.function
   def loss(outputs, labels):
     return Loss((416,416,3,),80)([outputs[0], outputs[1], outputs[2], labels[0], labels[1], labels[2]]);
