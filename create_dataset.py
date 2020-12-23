@@ -136,7 +136,7 @@ def parse_function_generator(num_classes, img_shape = (416,416), random = True, 
         ], axis = -1), dtype = tf.int32), 
       clip_value_min = 0, clip_value_max = [[h//32-1, w//32-1, 2]]), 
       arguments = {'h': img_shape[1], 'w': img_shape[0]})([level1_bbox, level1_anchors]); # level1_coords.shape = (level1_num, 3) in sequence of (h, w, anchor)
-    assert_level1 = tf.debugging.Assert(tf.math.logical_and(tf.math.greater_equal(level1_labels, 0), tf.math.less_equal(level1_labels, 79)), [level1_labels]);
+    assert_level1 = tf.debugging.Assert(tf.math.reduce_all(tf.math.logical_and(tf.math.greater_equal(level1_labels, 0), tf.math.less_equal(level1_labels, 79))), [level1_labels]);
     level1_outputs = tf.keras.layers.Lambda(lambda x, c: tf.concat([x[0], tf.ones((tf.shape(x[0])[0], 1), dtype = tf.float32), tf.one_hot(tf.cast(x[1], dtype = tf.int32), c)], axis = -1), arguments = {'c': num_classes})([level1_bbox, level1_labels]); # level1_outputs.shape = (level1_num, 5 + c)
     level1_gt = tf.keras.layers.Lambda(lambda x, h, w, c: tf.scatter_nd(updates = x[0], indices = x[1], shape = (h // 32, w // 32, 3, 5 + c)), arguments = {'h': img_shape[1], 'w': img_shape[0], 'c': num_classes})([level1_outputs, level1_coords]); # level1_gt.shape = (h//32, w//32, 3, 5+c)
     level2_mask = tf.keras.layers.Lambda(lambda x: tf.math.equal(x, 1))(best_levels); # level2_mask.shape = (valid_num)
@@ -151,7 +151,7 @@ def parse_function_generator(num_classes, img_shape = (416,416), random = True, 
         ], axis = -1), dtype = tf.int32), 
       clip_value_min = 0, clip_value_max = [[h//16-1, w//16-1, 2]]), 
       arguments = {'h': img_shape[1], 'w': img_shape[0]})([level2_bbox, level2_anchors]); # level2_outputs.shape = (level2_num, 3) in sequence of (h, w, anchor)
-    assert_level2 = tf.debugging.Assert(tf.math.logical_and(tf.math.greater_equal(level2_labels, 0), tf.math.less_equal(level2_labels, 79)), [level2_labels]);
+    assert_level2 = tf.debugging.Assert(tf.math.reduce_all(tf.math.logical_and(tf.math.greater_equal(level2_labels, 0), tf.math.less_equal(level2_labels, 79))), [level2_labels]);
     level2_outputs = tf.keras.layers.Lambda(lambda x, c: tf.concat([x[0], tf.ones((tf.shape(x[0])[0], 1), dtype = tf.float32), tf.one_hot(tf.cast(x[1], dtype = tf.int32), c)], axis = -1), arguments = {'c': num_classes})([level2_bbox, level2_labels]); # level2_outputs.shape = (level2_num, 5 + c)
     level2_gt = tf.keras.layers.Lambda(lambda x, h, w, c: tf.scatter_nd(updates = x[0], indices = x[1], shape = (h // 16, w // 16, 3, 5 + c)), arguments = {'h': img_shape[1], 'w': img_shape[0], 'c': num_classes})([level2_outputs, level2_coords]); # level2_gt.shape = (h//16, w//16, 3, 5+c)
     level3_mask = tf.keras.layers.Lambda(lambda x: tf.math.equal(x, 2))(best_levels); # level3_mask.shape = (valid_num)
@@ -166,7 +166,7 @@ def parse_function_generator(num_classes, img_shape = (416,416), random = True, 
         ], axis = -1), dtype = tf.int32), 
       clip_value_min = 0, clip_value_max = [[h//8-1, w//8-1, 2]]), 
       arguments = {'h': img_shape[1], 'w': img_shape[0]})([level3_bbox, level3_anchors]); # level3_outputs.shape = (level3_num, 3) in sequence of (h, w, anchor)
-    assert_level3 = tf.debugging.Assert(tf.math.logical_and(tf.math.greater_equal(level3_labels, 0), tf.math.less_equal(level3_labels, 79)), [level3_labels]);
+    assert_level3 = tf.debugging.Assert(tf.math.reduce_all(tf.math.logical_and(tf.math.greater_equal(level3_labels, 0), tf.math.less_equal(level3_labels, 79))), [level3_labels]);
     level3_outputs = tf.keras.layers.Lambda(lambda x, c: tf.concat([x[0], tf.ones((tf.shape(x[0])[0], 1), dtype = tf.float32), tf.one_hot(tf.cast(x[1], dtype = tf.int32), c)], axis = -1), arguments = {'c': num_classes})([level3_bbox, level3_labels]); # level3_outputs.shape = (level3_num, 5 + c)
     level3_gt = tf.keras.layers.Lambda(lambda x, h, w, c: tf.scatter_nd(updates = x[0], indices = x[1], shape = (h // 8, w // 8, 3, 5 + c)), arguments = {'h': img_shape[1], 'w': img_shape[0], 'c': num_classes})([level3_outputs, level3_coords]); # level3_gt.shape = (h//8, w//8, 3, 5+c)
     return image, (level1_gt, level2_gt, level3_gt);
