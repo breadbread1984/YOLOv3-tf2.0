@@ -144,10 +144,25 @@ def Loss(img_shape, class_num = 80):
       ))
     )([true_box, pred_box, object_mask]);
     # confidence_loss.shape = ()
+    # 2) punish wrongly predicted confidence
+    confidence_loss = tf.keras.layers.Lambda(lambda x:
+      # supervise positive examples with weight 1
+      tf.keras.losses.BinaryCrossentropy(from_logits = False)(
+        tf.boolean_mask(x[0], x[2]),
+        tf.boolean_mask(x[1], x[2])
+      ) +
+      # supervise negative examples with weight 100
+      100 * tf.keras.losses.BinaryCrossentropy(from_logits = False)(
+        tf.boolean_mask(x[0], tf.math.logical_not(x[2])),
+        tf.boolean_mask(x[1], tf.math.logical_not(x[2]))
+      ) 
+    )([true_box_confidence, pred_box_confidence, object_mask]);
+    '''
     # 2) punish wrongly predicted confidence with focal loss
     confidence_loss = tf.keras.layers.Lambda(lambda x: 
       tf.math.reduce_mean(tfa.losses.SigmoidFocalCrossEntropy(from_logits = False)(x[0], x[1]))
     )([true_box_confidence, pred_box_confidence]);
+    '''
     # class_loss.shape = ()
     # 3) only supervise classes of positive examples.
     class_loss = tf.keras.layers.Lambda(lambda x:
