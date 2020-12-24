@@ -2,15 +2,15 @@
 
 YOLOv3 implemented with tensorflow 2.0
 
-### how to train on MS COCO 2014
+### how to train on MS COCO 2017
 
-download datasets by executing the following command
+download COCO2017 dataset from [here](https://cocodataset.org/). unzip directory train2017, val2017 and annotations. generate dataset with the following command.
 
-```Bash
-python3 download_datasets.py
+```python
+python3 create_datasets.py </path/to/train2017> </path/to/val2017> </path/to/annotations>
 ```
 
-make sure no errors occur during the execution.
+upon executing the script successfully, there will be directories named trainset and testset under the root directory of the source code.
 
 then train the model by executing the following command
 
