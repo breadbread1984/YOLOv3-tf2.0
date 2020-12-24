@@ -7,7 +7,7 @@ YOLOv3 implemented with tensorflow 2.0
 download COCO2017 dataset from [here](https://cocodataset.org/). unzip directory train2017, val2017 and annotations. generate dataset with the following command.
 
 ```python
-python3 create_datasets.py </path/to/train2017> </path/to/val2017> </path/to/annotations>
+python3 create_dataset.py </path/to/train2017> </path/to/val2017> </path/to/annotations>
 ```
 
 upon executing the script successfully, there will be directories named trainset and testset under the root directory of the source code.
