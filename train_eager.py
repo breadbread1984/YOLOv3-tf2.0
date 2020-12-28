@@ -20,7 +20,7 @@ def main():
   yolov3 = YOLOv3((416,416,3), 80);
   yolov3_loss = Loss((416,416,3), 80);
   optimizer = tf.keras.optimizers.Adam(tf.keras.optimizers.schedules.ExponentialDecay(1e-4, decay_steps = 110000, decay_rate = 0.99));
-  checkpoint = tf.train.Checkpoint(model = yolov3, optimizer = optimizer, optimizer_step = optimizer.iterations);
+  checkpoint = tf.train.Checkpoint(model = yolov3, optimizer = optimizer);
   train_loss = tf.keras.metrics.Mean(name = 'train loss', dtype = tf.float32);
   test_loss = tf.keras.metrics.Mean(name = 'test loss', dtype = tf.float32);
   # load downloaded dataset
