@@ -152,8 +152,7 @@ def Loss(img_shape, class_num = 80):
       lambda x: tf.expand_dims(x[0], axis = -1),
                 tf.expand_dims(x[1], axis = -1),
                 tf.expand_dims(x[2], axis = -1),
-                tf.expand_dims(x[3], axis = -1)
-    )([iou, pred_box_confidence, true_class, pred_class]);
+                tf.expand_dims(x[3], axis = -1))([iou, pred_box_confidence, true_class, pred_class]);
     # 2) punish wrongly predicted confidence with focal loss
     confidence_loss = tfa.losses.SigmoidFocalCrossEntropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(iou, pred_box_confidence); # confidence_loss.shape = (batch, grid h, grid w, anchor_num)
     confidence_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(x))(confidence_loss); # confidence_loss.shape = ()
