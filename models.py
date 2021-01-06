@@ -146,23 +146,19 @@ def Loss(img_shape, class_num = 80):
     # object_mask = tf.keras.layers.Lambda(lambda x: tf.cast(x, dtype = tf.bool))(true_box_confidence);
     # mean square error of bounding location in proportional coordinates
     # 1) only supervise boundings of positve examples.
-    iou = tf.keras.layers.Lambda(lambda x: tfa.losses.GIoULoss(mode = 'giou', reduction = tf.keras.losses.Reduction.NONE)(x[0], x[1]))([true_bbox, pred_bbox]); # iou.shape = (batch, grid h, grid w, anchor_num)
+    iou = tfa.losses.GIoULoss(mode = 'giou', reduction = tf.keras.losses.Reduction.NONE)(true_bbox, pred_bbox); # iou.shape = (batch, grid h, grid w, anchor_num)
     pos_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(1.0 - x))(iou); # pos_loss.shape = ()
+    iou, pred_box_confidence, true_class, pred_class = tf.keras.layers.Lambda(
+      lambda x: tf.expand_dims(x[0], axis = -1),
+                tf.expand_dims(x[1], axis = -1),
+                tf.expand_dims(x[2], axis = -1),
+                tf.expand_dims(x[3], axis = -1)
+    )([iou, pred_box_confidence, true_class, pred_class]);
     # 2) punish wrongly predicted confidence with focal loss
-    confidence_loss = tf.keras.layers.Lambda(lambda x: 
-      tfa.losses.SigmoidFocalCrossEntropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(
-        tf.expand_dims(x[0], axis = -1), # true_confidence.shape = (batch, grid h, grid w, anchor_num, 1)
-        tf.expand_dims(x[1], axis = -1) # pred_confidence.shape = (batch, grid h, grid w, anchor_num, 1)
-      )
-    )([iou, pred_box_confidence]); # confidence_loss.shape = (batch, grid h, grid w, anchor_num)
+    confidence_loss = tfa.losses.SigmoidFocalCrossEntropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(iou, pred_box_confidence); # confidence_loss.shape = (batch, grid h, grid w, anchor_num)
     confidence_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(x))(confidence_loss); # confidence_loss.shape = ()
     # 3) only supervise classes of positive examples.
-    class_loss = tf.keras.layers.Lambda(lambda x:
-      tfa.losses.SigmoidFocalCrossEntropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(
-        tf.expand_dims(x[0], axis = -1), # obj_true_class.shape = (batch, grid h, grid w, anchor_num, class_num, 1)
-        tf.expand_dims(x[1], axis = -1) # obj_pred_class.shape = (batch, grid h, grid w, anchor_num, class_num, 1)
-      )
-    )([true_class, pred_class]); # class_loss.shape = (batch, grid h, grid w, anchor_num, class_num)
+    class_loss = tfa.losses.SigmoidFocalCrossEntropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(true_class, pred_class); # class_loss.shape = (batch, grid h, grid w, anchor_num, class_num)
     class_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(x))(class_loss); # class_loss.shape = ()
     loss = tf.keras.layers.Lambda(lambda x, ow, box, obj, cls: tf.math.add_n([box * x[0], obj * ow * x[1], cls * x[2]]), 
                                   arguments = {'ow': objectness_weights[l], 'box': loss_weights['box'], 'obj': loss_weights['obj'], 'cls': loss_weights['cls']}
