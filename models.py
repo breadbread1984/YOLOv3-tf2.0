@@ -155,7 +155,7 @@ def Loss(img_shape, class_num = 80):
     pos_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(1.0 - x))(giou); # pos_loss.shape = ()
     # 2) punish wrongly predicted confidence with focal loss
     confidence_loss = tf.keras.layers.Lambda(lambda x: 
-      tfa.losses.SigmoidFocalCrossEntropy(from_logits = False)(
+      tfa.losses.SigmoidFocalCrossEntropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(
         tf.expand_dims(x[0], axis = -1), # true_confidence.shape = (batch, grid h, grid w, anchor_num, 1)
         tf.expand_dims(x[1], axis = -1) # pred_confidence.shape = (batch, grid h, grid w, anchor_num, 1)
       )
@@ -163,7 +163,7 @@ def Loss(img_shape, class_num = 80):
     confidence_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(x))(confidence_loss); # confidence_loss.shape = ()
     # 3) only supervise classes of positive examples.
     class_loss = tf.keras.layers.Lambda(lambda x:
-      tfa.losses.SigmoidFocalCrossEntropy(from_logits = False)(
+      tfa.losses.SigmoidFocalCrossEntropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(
         tf.expand_dims(tf.boolean_mask(x[0], x[2]), axis = -1), # obj_true_class.shape = (object_num, class_num, 1)
         tf.expand_dims(tf.boolean_mask(x[1], x[2]), axis = -1) # obj_pred_class.shape = (object_num, class_num, 1)
       )
