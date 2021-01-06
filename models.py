@@ -143,31 +143,26 @@ def Loss(img_shape, class_num = 80):
     true_box_confidence = tf.keras.layers.Lambda(lambda x: x[..., 4])(label_of_this_layer); # true_box_confidence.shape = (batch, grid h, grid w, anchor_num)
     true_class = tf.keras.layers.Lambda(lambda x: x[..., 5:])(label_of_this_layer); # true_class.shape = (batch, grid h, grid w, anchor_num, class_num)
     # mask of true positive
-    object_mask = tf.keras.layers.Lambda(lambda x: tf.cast(x, dtype = tf.bool))(true_box_confidence);
+    # object_mask = tf.keras.layers.Lambda(lambda x: tf.cast(x, dtype = tf.bool))(true_box_confidence);
     # mean square error of bounding location in proportional coordinates
     # 1) only supervise boundings of positve examples.
-    giou = tf.keras.layers.Lambda(lambda x:
-      tfa.losses.GIoULoss(mode = 'giou', reduction = tf.keras.losses.Reduction.NONE)(
-        tf.boolean_mask(x[0], x[2]), # obj_true_box.shape = (object_num, 4)
-        tf.boolean_mask(x[1], x[2]) # obj_pred_box.shape = (object_num, 4)
-      )
-    )([true_bbox, pred_bbox, object_mask]); # giou.shape = (object_num)
-    pos_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(1.0 - x))(giou); # pos_loss.shape = ()
+    iou = tf.keras.layers.Lambda(lambda x: tfa.losses.GIoULoss(mode = 'giou', reduction = tf.keras.losses.Reduction.NONE)(x[0], x[1]))([true_bbox, pred_bbox]); # iou.shape = (batch, grid h, grid w, anchor_num)
+    pos_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(1.0 - x))(iou); # pos_loss.shape = ()
     # 2) punish wrongly predicted confidence with focal loss
     confidence_loss = tf.keras.layers.Lambda(lambda x: 
       tfa.losses.SigmoidFocalCrossEntropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(
         tf.expand_dims(x[0], axis = -1), # true_confidence.shape = (batch, grid h, grid w, anchor_num, 1)
         tf.expand_dims(x[1], axis = -1) # pred_confidence.shape = (batch, grid h, grid w, anchor_num, 1)
       )
-    )([true_box_confidence, pred_box_confidence]); # confidence_loss.shape = (batch, grid h, grid w, anchor_num)
+    )([iou, pred_box_confidence]); # confidence_loss.shape = (batch, grid h, grid w, anchor_num)
     confidence_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(x))(confidence_loss); # confidence_loss.shape = ()
     # 3) only supervise classes of positive examples.
     class_loss = tf.keras.layers.Lambda(lambda x:
       tfa.losses.SigmoidFocalCrossEntropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(
-        tf.expand_dims(tf.boolean_mask(x[0], x[2]), axis = -1), # obj_true_class.shape = (object_num, class_num, 1)
-        tf.expand_dims(tf.boolean_mask(x[1], x[2]), axis = -1) # obj_pred_class.shape = (object_num, class_num, 1)
+        tf.expand_dims(x[0], axis = -1), # obj_true_class.shape = (batch, grid h, grid w, anchor_num, class_num, 1)
+        tf.expand_dims(x[1], axis = -1) # obj_pred_class.shape = (batch, grid h, grid w, anchor_num, class_num, 1)
       )
-    )([true_class, pred_class, object_mask]); # class_loss.shape = (object_num, class_num)
+    )([true_class, pred_class]); # class_loss.shape = (batch, grid h, grid w, anchor_num, class_num)
     class_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(x))(class_loss); # class_loss.shape = ()
     loss = tf.keras.layers.Lambda(lambda x, ow, box, obj, cls: tf.math.add_n([box * x[0], obj * ow * x[1], cls * x[2]]), 
                                   arguments = {'ow': objectness_weights[l], 'box': loss_weights['box'], 'obj': loss_weights['obj'], 'cls': loss_weights['cls']}
