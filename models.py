@@ -168,11 +168,15 @@ def Loss(img_shape, class_num = 80, ignore_thresh = 0.5):
       return ignore_mask;
     ignore_mask = tf.keras.layers.Lambda(lambda x, s: tf.map_fn(body, x, fn_output_signature = tf.TensorSpec(shape = s[:3])), arguments = {'s': input_shape_of_this_layer})([true_bbox, object_mask_bool, pred_bbox]); # ignore_mask.shape = (batch, grid h, grid w, anchor_num)
     # 4) position loss
+    # NOTE: only punish foreground area
+    # NOTE: punish smaller foreground targets more harshly
     xy_loss = tf.keras.layers.Lambda(lambda x:
       x[0] * x[1] * tf.keras.losses.BinaryCrossentropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(x[2], x[3])
     )([object_mask, loss_scale, true_xy, pred_xy]); # xy_loss.shape = (batch, grid h, grid w, anchor_num)
     wh_loss = tf.keras.layers.Lambda(lambda x: x[0] * x[1] * 0.5 * tf.math.reduce_sum(tf.math.square(x[2] - x[3]), axis = -1))([object_mask, loss_scale, true_wh, pred_wh]); # wh_loss.shape = (batch, grid h, grid w, anchor_num)
     # 5) confidence loss
+    # NOTE: punish foreground area which is miss classified
+    # NOTE: and punish background area which is far from foreground area which is miss classified
     confidence_loss = tf.keras.layers.Lambda(lambda x: 
       x[0] * tf.keras.losses.BinaryCrossentropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(
         tf.expand_dims(x[0], axis = -1), tf.expand_dims(x[1], axis = -1)
@@ -182,6 +186,7 @@ def Loss(img_shape, class_num = 80, ignore_thresh = 0.5):
       )
     )([object_mask, pred_box_confidence, ignore_mask]); # confidence_loss.shape = (batch, grid h, grid w, anchor_num)
     # 6) class loss
+    # NOTE: only punish foreground area
     class_loss = tf.keras.layers.Lambda(lambda x: 
       x[0] * tf.keras.losses.BinaryCrossentropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(x[1], x[2])
     )([object_mask, true_class, pred_class]); # class_loss.shape = (batch, grid h, grid w, anchor_num)
