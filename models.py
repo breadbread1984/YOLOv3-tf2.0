@@ -146,8 +146,9 @@ def Loss(img_shape, class_num = 80):
     # object_mask = tf.keras.layers.Lambda(lambda x: tf.cast(x, dtype = tf.bool))(true_box_confidence);
     # mean square error of bounding location in proportional coordinates
     # 1) only supervise boundings of positve examples.
-    iou = tfa.losses.GIoULoss(mode = 'giou', reduction = tf.keras.losses.Reduction.NONE)(true_bbox, pred_bbox); # iou.shape = (batch, grid h, grid w, anchor_num)
-    pos_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(1.0 - x))(iou); # pos_loss.shape = ()
+    iou_loss = tfa.losses.GIoULoss(mode = 'giou', reduction = tf.keras.losses.Reduction.NONE)(true_bbox, pred_bbox); # iou.shape = (batch, grid h, grid w, anchor_num)
+    iou = tf.keras.layers.Lambda(lambda x: 1.0 - x)(iou_loss);
+    pos_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(x))(iou_loss); # pos_loss.shape = ()
     iou, pred_box_confidence, true_class, pred_class = tf.keras.layers.Lambda(
       lambda x: tf.expand_dims(x[0], axis = -1),
                 tf.expand_dims(x[1], axis = -1),
