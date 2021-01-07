@@ -102,12 +102,6 @@ def OutputParser(input_shape, img_shape, anchors):
   box_class_probs = tf.keras.layers.Lambda(lambda x: tf.math.sigmoid(x[..., 5:]))(feats);
   return tf.keras.Model(inputs = feats, outputs = (box_xy, box_wh, box_confidence, box_class_probs));
 
-def IoU():
-
-  inputs1 = tf.keras.Input((4,)); # inputs1.shape = (obj_num1, 4) in sequence of (ymin, xmin, ymax, xmax)
-  inputs2 = tf.keras.Input((4,)); # inputs2.shape = (obj_num2, 4) in sequence of (ymin, xmin, ymax, xmax)
-  return tf.keras.Model(inputs = (inputs1, inputs2), outputs = iou);
-
 def Loss(img_shape, class_num = 80, ignore_thresh = 0.5):
 
   # outputs is a tuple
