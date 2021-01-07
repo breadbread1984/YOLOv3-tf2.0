@@ -102,7 +102,22 @@ def OutputParser(input_shape, img_shape, anchors):
   box_class_probs = tf.keras.layers.Lambda(lambda x: tf.math.sigmoid(x[..., 5:]))(feats);
   return tf.keras.Model(inputs = feats, outputs = (box_xy, box_wh, box_confidence, box_class_probs));
 
-def Loss(img_shape, class_num = 80):
+def IoU():
+
+  inputs1 = tf.keras.Input((4,)); # inputs1.shape = (obj_num1, 4) in sequence of (ymin, xmin, ymax, xmax)
+  inputs2 = tf.keras.Input((4,)); # inputs2.shape = (obj_num2, 4) in sequence of (ymin, xmin, ymax, xmax)
+  bbox1_hw = tf.keras.layers.Lambda(lambda x: x[..., 2:4] - x[..., 0:2])(inputs1); # bbox1_hw.shape = (obj_num1, 2)
+  bbox1_area = tf.keras.layers.Lambda(lambda x: x[..., 0] * x[..., 1])(bbox1_hw); # bbox1_area.shape = (obj_num1)
+  bbox2_hw = tf.keras.layers.Lambda(lambda x: x[..., 2:4] - x[..., 0:2])(inputs2); # bbox2_hw.shape = (obj_num2, 2)
+  bbox2_area = tf.keras.layers.Lambda(lambda x: x[..., 0] * x[..., 1])(bbox2_hw); # bbox2_area.shape = (obj_num2)
+  intersect_min = tf.keras.layers.Lambda(lambda x: tf.maximum(tf.expand_dims(x[0][..., 0:2], axis = -1), tf.expand_dims(x[1][..., 0:2], axis = 0)))([inputs1, inputs2]); # intersect_min.shape = (obj_num1, obj_num2, 2)
+  intersect_max = tf.keras.layers.Lambda(lambda x: tf.minimum(tf.expand_dims(x[0][..., 2:4], axis = -1), tf.expand_dims(x[1][..., 2:4], axis = 0)))([inputs1, inputs2]); # intersect_max.shape = (obj_num1, obj_num2, 2)
+  intersect_hw = tf.keras.layers.Lambda(lambda x: tf.maximum(x[0] - x[1], 0))([intersect_max, intersect_min]); # intersect_hw.shape = (obj_num1, obj_num2, 2)
+  intersect_area = tf.keras.layers.Lambda(lambda x: x[..., 0] * x[..., 1])(intersect_hw); # intersect_area.shape = (obj_num1, obj_num2)
+  iou = tf.keras.layers.Lambda(lambda x: x[2] / tf.maximum(tf.expand_dims(x[0], axis = -1) + tf.expand_dims(x[1], axis = 0), 1e-5))([bbox1_area, bbox2_area, intersect_area]); # iou.shape = (obj_num1, obj_num2)
+  return tf.keras.Model(inputs = (inputs1, inputs2), outputs = iou);
+
+def Loss(img_shape, class_num = 80, ignore_thresh = 0.5):
 
   # outputs is a tuple
   # outputs.shape[layer] = batch x h x w x anchor_num x (1(delta x) + 1(delta y) + 1(width scale) + 1(height scale) + 1(object mask) + class_num(class probability))
@@ -111,8 +126,6 @@ def Loss(img_shape, class_num = 80):
   # NOTE: the info carried by the output and the label is different.
   tf.debugging.Assert(tf.equal(tf.shape(img_shape)[0], 3), [img_shape]);
   anchors = {2: [[10, 13], [16, 30], [33, 23]], 1: [[30, 61], [62, 45], [59, 119]], 0: [[116, 90], [156, 198], [373, 326]]};
-  objectness_weights = {2: 0.4, 1: 1.0, 0: 4.0}; # supervise objectness of larger targets more strictly
-  loss_weights = {"box": 0.05, "obj": 1.0, "cls": 0.5};
   input_shapes = [
     (img_shape[0] // 32, img_shape[1] // 32, 3, 5 + class_num),
     (img_shape[0] // 16, img_shape[1] // 16, 3, 5 + class_num),
@@ -127,42 +140,61 @@ def Loss(img_shape, class_num = 80):
     anchors_of_this_layer = anchors[l];
     input_of_this_layer = inputs[l];
     label_of_this_layer = labels[l];
-    # bounding info from YOLOv3
+    # 1) preprocess prediction
     pred_xy, pred_wh, pred_box_confidence, pred_class = OutputParser(input_shape_of_this_layer, img_shape, anchors_of_this_layer)(input_of_this_layer);
     pred_half_wh = tf.keras.layers.Lambda(lambda x: x / 2)(pred_wh);
     pred_upperleft = tf.keras.layers.Lambda(lambda x: x[0] - x[1])([pred_xy, pred_half_wh]); # pred_upperleft.shape = (batch, grid h, grid w, anchor_num, 2) in sequence of (xmin, ymin)
     pred_bottomright = tf.keras.layers.Lambda(lambda x: x[0] + x[1])([pred_xy, pred_half_wh]); # pred_bottomright.shape = (batch, grid h, grid w, anchor_num, 2) in sequence of (xmax, ymax)
     pred_bbox = tf.keras.layers.Lambda(lambda x: tf.concat([tf.reverse(x[0], axis = [-1]), tf.reverse(x[1], axis = [-1])], axis = -1))([pred_upperleft, pred_bottomright]); # pred_bbox.shape = (batch, grid h, grid w, anchor_num, 4) in sequence of (ymin, xmin, ymax, xmax)
-    # bounding info from label
+    # 2) preprocess label
     true_position = tf.keras.layers.Lambda(lambda x: x[..., 0:4])(label_of_this_layer); # true_box.shape = (batch, grid h, grid w, anchor_num, 4) in sequence of (center x, center y, w, h)
-    true_xy = tf.keras.layers.Lambda(lambda x: x[..., 0:2])(true_position);
-    true_half_wh = tf.keras.layers.Lambda(lambda x: x[..., 2:4] / 2)(true_position);
+    true_xy = tf.keras.layers.Lambda(lambda x: x[..., 0:2])(true_position); # true_xy.shape = (batch, grid h, grid w, anchor_num, 2)
+    true_wh = tf.keras.layers.Lambda(lambda x: x[..., 2:4])(true_position); # true_wh.shape = (batch, grid h, grid w, anchor_num, 2)
+    true_half_wh = tf.keras.layers.Lambda(lambda x: x[..., 2:4] / 2)(true_position); # true_half_wh.shape = (batch, grid h, grid w, anchor_num, 2)
     true_upperleft = tf.keras.layers.Lambda(lambda x: x[0] - x[1])([true_xy, true_half_wh]); # true_upperleft.shape = (batch, grid h, grid w, anchor_num, 2) in sequence of (xmin, ymin)
     true_bottomright = tf.keras.layers.Lambda(lambda x: x[0] + x[1])([true_xy, true_half_wh]); # true_bottomright.shape = (batch, grid h, grid w, anchor_num, 2) in sequence of (xmax, ymax)
+    object_mask = tf.keras.layers.Lambda(lambda x: x[..., 4])(label_of_this_layer); # object_mask.shape = (batch, grid h, grid w, anchor_num)
+    
+    object_mask_bool = tf.keras.layers.Lambda(lambda x: tf.cast(x, dtype = tf.bool))(object_mask); # object_mask_bool.shape = (batch, grid h, grid w, anchor_num)
     true_bbox = tf.keras.layers.Lambda(lambda x: tf.concat([tf.reverse(x[0], axis = [-1]), tf.reverse(x[1], axis = [-1])], axis = -1))([true_upperleft, true_bottomright]); # true_bbox.shape = (batch, grid h, grid w, anchor_num, 4) in sequence of (ymin, xmin, ymax, xmax)
-    true_box_confidence = tf.keras.layers.Lambda(lambda x: x[..., 4])(label_of_this_layer); # true_box_confidence.shape = (batch, grid h, grid w, anchor_num)
     true_class = tf.keras.layers.Lambda(lambda x: x[..., 5:])(label_of_this_layer); # true_class.shape = (batch, grid h, grid w, anchor_num, class_num)
-    # mask of true positive
-    # object_mask = tf.keras.layers.Lambda(lambda x: tf.cast(x, dtype = tf.bool))(true_box_confidence);
-    # mean square error of bounding location in proportional coordinates
-    # 1) only supervise boundings of positve examples.
-    iou_loss = tfa.losses.GIoULoss(mode = 'giou', reduction = tf.keras.losses.Reduction.NONE)(true_bbox, pred_bbox); # iou.shape = (batch, grid h, grid w, anchor_num)
-    iou = tf.keras.layers.Lambda(lambda x: 1.0 - x)(iou_loss);
-    iou_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(x))(iou_loss); # iou_loss.shape = ()
-    iou, pred_box_confidence, true_class, pred_class = tf.keras.layers.Lambda(
-      lambda x: (tf.expand_dims(x[0], axis = -1),
-                tf.expand_dims(x[1], axis = -1),
-                tf.expand_dims(x[2], axis = -1),
-                tf.expand_dims(x[3], axis = -1)))([iou, pred_box_confidence, true_class, pred_class]);
-    # 2) punish wrongly predicted confidence with focal loss
-    confidence_loss = tf.keras.layers.Lambda(lambda x: tfa.losses.SigmoidFocalCrossEntropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(x[0], x[1]))([iou, pred_box_confidence]); # confidence_loss.shape = (batch, grid h, grid w, anchor_num)
-    confidence_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(x))(confidence_loss); # confidence_loss.shape = ()
-    # 3) only supervise classes of positive examples.
-    class_loss = tf.keras.layers.Lambda(lambda x: tfa.losses.SigmoidFocalCrossEntropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(x[0], x[1]))([true_class, pred_class]); # class_loss.shape = (batch, grid h, grid w, anchor_num, class_num)
-    class_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(x))(class_loss); # class_loss.shape = ()
-    loss = tf.keras.layers.Lambda(lambda x, ow, box, obj, cls: tf.math.add_n([box * x[0], obj * ow * x[1], cls * x[2]]), 
-                                  arguments = {'ow': objectness_weights[l], 'box': loss_weights['box'], 'obj': loss_weights['obj'], 'cls': loss_weights['cls']}
-    )([iou_loss, confidence_loss, class_loss]);
+    loss_scale = tf.keras.layers.Lambda(lambda x: 2 - x[..., 2:3] * x[..., 3:4])(true_position); # loss_scale.shape = (batch, grid h, grid w, anchor_num) punish harshly for smaller targets
+    # 3) ignore mask
+    def body(true_bbox, object_mask_bool, pred_bbox):
+      # true_bbox.shape = (grid h, grid w, anchor_num, 4)
+      # object_mask_bool.shape = (grid h, grid w, anchor_num)
+      # pred_bbox.shape = (grid h, grid w, anchor_num, 4)
+      true_bbox_list = tf.boolean_mask(true_bbox, object_mask_bool); # true_bbox_list.shape = (obj_num, 4)
+      shape = tf.shape(pred_bbox)[:-1];
+      pred_bbox_list = tf.reshape(pred_bbox, (-1, 4));
+      iou = IoU()(true_bbox_list, pred_bbox_list); # iou.shape = (obj_num, grid h * grid w * anchor_num)
+      iou = tf.reshape(iou, tf.concat([tf.shape(true_bbox_list)[0:1], tf.shape(pred_bbox)[:-1]], axis = 0)); # iou.shape = (obj_num, grid h, grid w, anchor_num)
+      best_iou = tf.math.reduce_max(iou, axis = 0); # iou.shape = (grid h, grid w, anchor_num)
+      ignore_mask = tf.where(tf.math.less(best_iou, ignore_thresh), tf.ones_like(best_iou), tf.zeros_like(best_iou)); # ignore_mask.shape = (grid h, grid w, anchor_num)
+      return ignore_mask;
+    ignore_mask = tf.keras.layers.Lambda(x: tf.map_fn(body, x))([true_bbox, object_mask_bool, pred_bbox]); # ignore_mask.shape = (batch, grid h, grid w, anchor_num)
+    # 4) position loss
+    xy_loss = tf.keras.layers.Lambda(lambda x:
+      x[0] * x[1] * tf.keras.losses.BinaryCrossentropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(
+        tf.expand_dims(x[2], axis = -1), tf.expand_dims(x[3], axis = -1)
+      )
+    )([object_mask, loss_scale, true_xy, pred_xy]); # xy_loss.shape = (batch, grid h, grid w, anchor_num)
+    wh_loss = tf.keras.layers.Lambda(lambda x: x[0] * x[1] * 0.5 * tf.math.square(x[2] - x[3]))([object_mask, loss_scale, true_wh, pred_wh]); # wh_loss.shape = (batch, grid h, grid w, anchor_num)
+    # 5) confidence loss
+    confidence_loss = tf.keras.layers.Lambda(lambda x: 
+      x[0] * tf.keras.losses.BinaryCrossentropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(
+        tf.expand_dims(x[0], axis = -1), tf.expand_dims(x[1], axis = -1)
+      ) + \
+      (1. - x[0]) * x[2] * tf.keras.losses.BinaryCrossentropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(
+        tf.expand_dims(x[0], axis = -1), tf.expand_dims(x[1], axis = -1)
+      )
+    )([object_mask, pred_box_confidence, ignore_mask]); # confidence_loss.shape = (batch, grid h, grid w, anchor_num)
+    # 6) class loss
+    class_loss = tf.keras.layers.Lambda(lambda x: 
+      x[0] * tf.keras.losses.BinaryCrossentropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(x[1], x[2])
+    )([object_mask, true_class, pred_class]); # class_loss.shape = (batch, grid h, grid w, anchor_num)
+    # 7) total
+    loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(tf.math.reduce_sum(tf.math.add_n(x), axis = [1,2,3]), axis = [0]))([xy_loss, wh_loss, confidence_loss, class_loss]); # loss.shape = ()
     losses.append(loss);
   loss = tf.keras.layers.Lambda(lambda x: tf.math.add_n(x))(losses);
   return tf.keras.Model(inputs = (*inputs, *labels), outputs = loss);
