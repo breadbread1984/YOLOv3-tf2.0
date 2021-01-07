@@ -106,15 +106,6 @@ def IoU():
 
   inputs1 = tf.keras.Input((4,)); # inputs1.shape = (obj_num1, 4) in sequence of (ymin, xmin, ymax, xmax)
   inputs2 = tf.keras.Input((4,)); # inputs2.shape = (obj_num2, 4) in sequence of (ymin, xmin, ymax, xmax)
-  bbox1_hw = tf.keras.layers.Lambda(lambda x: x[..., 2:4] - x[..., 0:2])(inputs1); # bbox1_hw.shape = (obj_num1, 2)
-  bbox1_area = tf.keras.layers.Lambda(lambda x: x[..., 0] * x[..., 1])(bbox1_hw); # bbox1_area.shape = (obj_num1)
-  bbox2_hw = tf.keras.layers.Lambda(lambda x: x[..., 2:4] - x[..., 0:2])(inputs2); # bbox2_hw.shape = (obj_num2, 2)
-  bbox2_area = tf.keras.layers.Lambda(lambda x: x[..., 0] * x[..., 1])(bbox2_hw); # bbox2_area.shape = (obj_num2)
-  intersect_min = tf.keras.layers.Lambda(lambda x: tf.maximum(tf.expand_dims(x[0][..., 0:2], axis = 1), tf.expand_dims(x[1][..., 0:2], axis = 0)))([inputs1, inputs2]); # intersect_min.shape = (obj_num1, obj_num2, 2)
-  intersect_max = tf.keras.layers.Lambda(lambda x: tf.minimum(tf.expand_dims(x[0][..., 2:4], axis = 1), tf.expand_dims(x[1][..., 2:4], axis = 0)))([inputs1, inputs2]); # intersect_max.shape = (obj_num1, obj_num2, 2)
-  intersect_hw = tf.keras.layers.Lambda(lambda x: tf.maximum(x[0] - x[1], 0))([intersect_max, intersect_min]); # intersect_hw.shape = (obj_num1, obj_num2, 2)
-  intersect_area = tf.keras.layers.Lambda(lambda x: x[..., 0] * x[..., 1])(intersect_hw); # intersect_area.shape = (obj_num1, obj_num2)
-  iou = tf.keras.layers.Lambda(lambda x: x[2] / tf.maximum(tf.expand_dims(x[0], axis = -1) + tf.expand_dims(x[1], axis = 0), 1e-5))([bbox1_area, bbox2_area, intersect_area]); # iou.shape = (obj_num1, obj_num2)
   return tf.keras.Model(inputs = (inputs1, inputs2), outputs = iou);
 
 def Loss(img_shape, class_num = 80, ignore_thresh = 0.5):
@@ -168,12 +159,20 @@ def Loss(img_shape, class_num = 80, ignore_thresh = 0.5):
       true_bbox_list = tf.boolean_mask(true_bbox, object_mask_bool); # true_bbox_list.shape = (obj_num, 4)
       shape = tf.shape(pred_bbox)[:-1];
       pred_bbox_list = tf.reshape(pred_bbox, (-1, 4));
-      iou = IoU()([true_bbox_list, pred_bbox_list]); # iou.shape = (obj_num, grid h * grid w * anchor_num)
+      bbox1_hw = true_bbox_list[..., 2:4] - true_bbox_list[..., 0:2]; # bbox1_hw.shape = (obj_num1, 2)
+      bbox1_area = bbox1_hw[..., 0] * bbox1_hw[..., 1]; # bbox1_area.shape = (obj_num1)
+      bbox2_hw = pred_bbox_list[..., 2:4] - pred_bbox_list[..., 0:2]; # bbox2_hw.shape = (obj_num2, 2)
+      bbox2_area = bbox2_hw[..., 0] * bbox2_hw[..., 1]; # bbox2_area.shape = (obj_num2)
+      intersect_min = tf.maximum(tf.expand_dims(true_bbox_list[..., 0:2], axis = 1), tf.expand_dims(pred_bbox_list[..., 0:2], axis = 0)); # intersect_min.shape = (obj_num1, obj_num2, 2)
+      intersect_max = tf.minimum(tf.expand_dims(true_bbox_list[..., 2:4], axis = 1), tf.expand_dims(pred_bbox_list[..., 2:4], axis = 0)); # intersect_max.shape = (obj_num1, obj_num2, 2)
+      intersect_hw = tf.maximum(intersect_max - intersect_min, 0); # intersect_hw.shape = (obj_num1, obj_num2, 2)
+      intersect_area = intersect_hw[..., 0] * intersect_hw[..., 1]; # intersect_area.shape = (obj_num1, obj_num2)
+      iou = intersect_area / tf.maximum(tf.expand_dims(bbox1_area, axis = 1) + tf.expand_dims(bbox2_area, axis = 0), 1e-5); # iou.shape = (obj_num1, obj_num2)
       iou = tf.reshape(iou, tf.concat([tf.shape(true_bbox_list)[0:1], tf.shape(pred_bbox)[:-1]], axis = 0)); # iou.shape = (obj_num, grid h, grid w, anchor_num)
       best_iou = tf.math.reduce_max(iou, axis = 0); # iou.shape = (grid h, grid w, anchor_num)
       ignore_mask = tf.where(tf.math.less(best_iou, ignore_thresh), tf.ones_like(best_iou), tf.zeros_like(best_iou)); # ignore_mask.shape = (grid h, grid w, anchor_num)
       return ignore_mask;
-    ignore_mask = tf.keras.layers.Lambda(lambda x: tf.map_fn(body, x))([true_bbox, object_mask_bool, pred_bbox]); # ignore_mask.shape = (batch, grid h, grid w, anchor_num)
+    ignore_mask = tf.keras.layers.Lambda(lambda x, s: tf.map_fn(body, x, fn_output_signature = tf.TensorSpec(shape = s[:3])), arguments = {'s': input_shape_of_this_layer})([true_bbox, object_mask_bool, pred_bbox]); # ignore_mask.shape = (batch, grid h, grid w, anchor_num)
     # 4) position loss
     xy_loss = tf.keras.layers.Lambda(lambda x:
       x[0] * x[1] * tf.keras.losses.BinaryCrossentropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(
