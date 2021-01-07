@@ -148,7 +148,7 @@ def Loss(img_shape, class_num = 80):
     # 1) only supervise boundings of positve examples.
     iou_loss = tfa.losses.GIoULoss(mode = 'giou', reduction = tf.keras.losses.Reduction.NONE)(true_bbox, pred_bbox); # iou.shape = (batch, grid h, grid w, anchor_num)
     iou = tf.keras.layers.Lambda(lambda x: 1.0 - x)(iou_loss);
-    pos_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(x))(iou_loss); # pos_loss.shape = ()
+    iou_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(x))(iou_loss); # iou_loss.shape = ()
     iou, pred_box_confidence, true_class, pred_class = tf.keras.layers.Lambda(
       lambda x: (tf.expand_dims(x[0], axis = -1),
                 tf.expand_dims(x[1], axis = -1),
@@ -162,7 +162,7 @@ def Loss(img_shape, class_num = 80):
     class_loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(x))(class_loss); # class_loss.shape = ()
     loss = tf.keras.layers.Lambda(lambda x, ow, box, obj, cls: tf.math.add_n([box * x[0], obj * ow * x[1], cls * x[2]]), 
                                   arguments = {'ow': objectness_weights[l], 'box': loss_weights['box'], 'obj': loss_weights['obj'], 'cls': loss_weights['cls']}
-    )([pos_loss, confidence_loss, class_loss]);
+    )([iou_loss, confidence_loss, class_loss]);
     losses.append(loss);
   loss = tf.keras.layers.Lambda(lambda x: tf.math.add_n(x))(losses);
   return tf.keras.Model(inputs = (*inputs, *labels), outputs = loss);
