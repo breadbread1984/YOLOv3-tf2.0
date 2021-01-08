@@ -161,7 +161,7 @@ def Loss(img_shape, class_num = 80, ignore_thresh = 0.5):
       intersect_max = tf.minimum(tf.expand_dims(true_bbox_list[..., 2:4], axis = 1), tf.expand_dims(pred_bbox_list[..., 2:4], axis = 0)); # intersect_max.shape = (obj_num1, obj_num2, 2)
       intersect_hw = tf.maximum(intersect_max - intersect_min, 0); # intersect_hw.shape = (obj_num1, obj_num2, 2)
       intersect_area = intersect_hw[..., 0] * intersect_hw[..., 1]; # intersect_area.shape = (obj_num1, obj_num2)
-      iou = intersect_area / tf.maximum(tf.expand_dims(bbox1_area, axis = 1) + tf.expand_dims(bbox2_area, axis = 0), 1e-5); # iou.shape = (obj_num1, obj_num2)
+      iou = intersect_area / tf.maximum(tf.expand_dims(bbox1_area, axis = 1) + tf.expand_dims(bbox2_area, axis = 0) - intersect_area, 1e-5); # iou.shape = (obj_num1, obj_num2)
       iou = tf.reshape(iou, tf.concat([tf.shape(true_bbox_list)[0:1], tf.shape(pred_bbox)[:-1]], axis = 0)); # iou.shape = (obj_num, grid h, grid w, anchor_num)
       best_iou = tf.math.reduce_max(iou, axis = 0); # iou.shape = (grid h, grid w, anchor_num)
       ignore_mask = tf.where(tf.math.less(best_iou, ignore_thresh), tf.ones_like(best_iou), tf.zeros_like(best_iou)); # ignore_mask.shape = (grid h, grid w, anchor_num)
