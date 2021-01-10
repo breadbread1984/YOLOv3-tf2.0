@@ -19,7 +19,7 @@ def main():
   # yolov3 model
   yolov3 = YOLOv3((416,416,3), 80);
   yolov3_loss = Loss((416,416,3), 80);
-  optimizer = tf.keras.optimizers.Adam(tf.keras.optimizers.schedules.PiecewiseConstantDecay([1000, 4000], [1e-11, 1e-4, 1e-3]));
+  optimizer = tf.keras.optimizers.Adam(tf.keras.optimizers.schedules.PiecewiseConstantDecay([400, 1000], [1e-11, 1e-4, 1e-3]));
   #optimizer = tf.keras.optimizers.Adam(tf.keras.optimizers.schedules.ExponentialDecay(1e-3, decay_steps = 110000, decay_rate = 0.99));
   checkpoint = tf.train.Checkpoint(model = yolov3, optimizer = optimizer);
   train_loss = tf.keras.metrics.Mean(name = 'train loss', dtype = tf.float32);
