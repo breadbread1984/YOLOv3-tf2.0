@@ -191,7 +191,7 @@ def Loss(img_shape, class_num = 80, ignore_thresh = 0.5):
       x[0] * tf.keras.losses.BinaryCrossentropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(x[1], x[2])
     )([object_mask, true_class, pred_class]); # class_loss.shape = (batch, grid h, grid w, anchor_num)
     # 7) total
-    loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(tf.math.add_n(x)))([xy_loss, wh_loss, confidence_loss, class_loss]); # loss.shape = ()
+    loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(tf.math.add_n(x)))([xy_loss, wh_loss, confidence_loss, class_loss]); # loss.shape = ()
     losses.append(loss);
   loss = tf.keras.layers.Lambda(lambda x: tf.math.add_n(x))(losses);
   return tf.keras.Model(inputs = (*inputs, *labels), outputs = loss);
