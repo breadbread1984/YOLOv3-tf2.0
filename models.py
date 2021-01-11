@@ -177,13 +177,13 @@ def Loss(img_shape, class_num = 80, ignore_thresh = 0.5):
     # 5) confidence loss
     # NOTE: punish foreground area which is miss classified
     # NOTE: and punish background area which is far from foreground area and miss classified
-    confidence_loss = tf.keras.layers.Lambda(lambda x: 
+    confidence_loss = tf.keras.layers.Lambda(lambda x: tf.math.pow(x[0] - x[1], 2) * (
       x[0] * tf.keras.losses.BinaryCrossentropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(
         tf.expand_dims(x[0], axis = -1), tf.expand_dims(x[1], axis = -1)
       ) + \
       (1. - x[0]) * x[2] * tf.keras.losses.BinaryCrossentropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(
         tf.expand_dims(x[0], axis = -1), tf.expand_dims(x[1], axis = -1)
-      )
+      ))
     )([object_mask, pred_box_confidence, ignore_mask]); # confidence_loss.shape = (batch, grid h, grid w, anchor_num)
     # 6) class loss
     # NOTE: only punish foreground area
