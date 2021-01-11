@@ -185,7 +185,7 @@ def Loss(img_shape, class_num = 80, ignore_thresh = 0.5):
     # 6) class loss
     # NOTE: only punish foreground area
     class_loss = tf.keras.layers.Lambda(lambda x: 
-      x[0] * tf.math.reduce_sum(tf.keras.losses.BinaryCrossentropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(
+      x[0] * tf.math.reduce_mean(tf.keras.losses.BinaryCrossentropy(from_logits = False, reduction = tf.keras.losses.Reduction.NONE)(
         tf.expand_dims(x[1], axis = -1), 
         tf.expand_dims(x[2], axis = -1)
       ), axis = -1)
