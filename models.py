@@ -170,7 +170,7 @@ def Loss(img_shape, class_num = 80, ignore_thresh = 0.5):
     # 4) position loss
     # NOTE: only punish foreground area
     # NOTE: punish smaller foreground targets more harshly
-    giou_loss = tf.keras.layers.Lambda(lambda x: x[0] * tfa.losses.GIoULoss(mode = 'giou', reduction = tf.keras.losses.Reduction.NONE)(x[1], x[2]))([object_mask, true_bbox, pred_bbox]); # giou_loss.shape = (batch, grid h, grid w, anchor_num)
+    giou_loss = tf.keras.layers.Lambda(lambda x: x[0] * tfa.losses.GIoULoss(mode = 'iou', reduction = tf.keras.losses.Reduction.NONE)(x[1], x[2]))([object_mask, true_bbox, pred_bbox]); # giou_loss.shape = (batch, grid h, grid w, anchor_num)
     # 5) confidence loss
     # NOTE: punish foreground area which is miss classified
     # NOTE: and punish background area which is far from foreground area and miss classified
