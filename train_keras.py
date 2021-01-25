@@ -18,7 +18,7 @@ def main():
   with strategy.scope():
     yolov3 = YOLOv3((416,416,3,), 80);
   @tf.function
-  def loss(outputs, labels):
+  def loss(labels, outputs):
     return Loss((416,416,3,),80)([outputs[0], outputs[1], outputs[2], labels[0], labels[1], labels[2]]);
   yolov3.compile(optimizer = tf.keras.optimizers.Adam(1e-4), loss = loss);
   # load downloaded dataset
