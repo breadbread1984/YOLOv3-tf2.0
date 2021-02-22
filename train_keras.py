@@ -1,12 +1,12 @@
 #!/usr/bin/python3
 
-import os;
+from os import environ, listdir;
 import numpy as np;
 import tensorflow as tf;
 from models import YOLOv3, Loss;
 from create_dataset import parse_function_generator, parse_function;
 
-os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1';
+environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1';
 #os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3';
 #os.environ['CUDA_VISIBLE_DEVICES'] = '';
 batch_size = 12; # images of different sizes can't be stack into a batch
@@ -20,7 +20,7 @@ def main():
   @tf.function
   def loss(labels, outputs):
     return Loss((416,416,3,),80)([outputs[0], outputs[1], outputs[2], labels[0], labels[1], labels[2]]);
-  yolov3.compile(optimizer = tf.keras.optimizers.Adam(1e-4), loss = loss);
+  yolov3.compile(optimizer = tf.keras.optimizers.Adam(1e-5), loss = loss);
   # load downloaded dataset
   trainset_filenames = [join('trainset', filename) for filename in listdir('trainset')];
   testset_filenames = [join('testset', filename) for filename in listdir('testset')];
