@@ -117,8 +117,6 @@ def Loss(img_shape, layer, class_num = 80, ignore_thresh = 0.5):
     (img_shape[0] // 16, img_shape[1] // 16, 3, 5 + class_num),
     (img_shape[0] // 8, img_shape[1] // 8, 3, 5 + class_num)
   ];
-  inputs = [tf.keras.Input(input_shape) for input_shape in input_shapes]; # inputs[0].shape = (13, 13, 3, 5 + class num), inputs[1].shape = (26, 26, 3, 5 + class num), inputs[2].shape = (52, 52, 3, 5 + class num)
-  labels = [tf.keras.Input(input_shape) for input_shape in input_shapes]; # labels[0].shape = (13, 13, 3, 5 + class num), labels[1].shape = (26, 26, 3, 5 + class num), labels[2].shape = (52, 52, 3, 5 + class num)
   input_shape_of_this_layer = input_shapes[layer];
   anchors_of_this_layer = anchors[layer];
   input_of_this_layer = tf.keras.Input(input_shape_of_this_layer);
@@ -191,7 +189,7 @@ def Loss(img_shape, layer, class_num = 80, ignore_thresh = 0.5):
     )([object_mask, true_class, pred_class]); # class_loss.shape = (batch, grid h, grid w, anchor_num)
   # 7) total
   loss = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(tf.math.reduce_sum(tf.math.add_n(x), axis = [1,2,3]), axis = [0]))([xy_loss, wh_loss, confidence_loss, class_loss]); # loss.shape = ()
-  return tf.keras.Model(inputs = (inputs, labels), outputs = loss);
+  return tf.keras.Model(inputs = (input_of_this_layer, label_of_this_layer), outputs = loss);
 
 if __name__ == "__main__":
  
