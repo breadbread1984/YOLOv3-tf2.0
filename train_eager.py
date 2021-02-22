@@ -20,7 +20,9 @@ def main():
   [tf.config.experimental.set_memory_growth(gpu, True) for gpu in gpus];
   # yolov3 model
   yolov3 = YOLOv3((416,416,3), 80);
-  yolov3_loss = Loss((416,416,3), 80);
+  loss1 = Loss((416,416,3), 0, 80);
+  loss2 = Loss((416,416,3), 1, 80);
+  loss3 = Loss((416,416,3), 2, 80);
   #optimizer = tf.keras.optimizers.Adam(tf.keras.optimizers.schedules.ExponentialDecay(1e-5, decay_steps = 110000, decay_rate = 0.99));
   optimizer = tf.keras.optimizers.Adam(1e-5);
   checkpoint = tf.train.Checkpoint(model = yolov3, optimizer = optimizer);
@@ -43,9 +45,10 @@ def main():
   # train model
   while True:
     images, labels = next(trainset_iter);
+    labels1, labels2, labels3 = labels;
     with tf.GradientTape() as tape:
-      outputs = yolov3(images);
-      loss = yolov3_loss([*outputs, *labels]);
+      outputs1, outputs2, outputs3 = yolov3(images);
+      loss = loss1([outputs1, labels1]) + loss2([outputs2, labels2]) + loss3([outputs3, labels3]);
     # check whether the loss numberic is correct
     if tf.math.reduce_any(tf.math.is_nan(loss)) == True:
       print("NaN was detected in loss, skip the following steps!");
