@@ -70,7 +70,7 @@ def main():
       for i in range(10):
         images, labels = next(testset_iter); # images.shape = (b, h, w, 3)
         outputs = yolov3(images);
-        loss = yolov3_loss([*outputs, *labels]);
+        loss = loss1(outputs[0], labels[0]) + loss2(outputs[1], labels[1]) + loss3(outputs[2], labels[2]);
         test_loss.update_state(loss);
       # visualize
       image, bbox, labels = next(validationset_iter); # image.shape = (h, w, 3)
