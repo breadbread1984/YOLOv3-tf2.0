@@ -5,13 +5,10 @@ import tensorflow_addons as tfa;
 
 # NOTE: using functional API can save a lot of gmem
 
-def ConvBlock(input_shape, filters, kernel_size, strides = (1,1), padding = None):
+def ConvBlock(input_shape, filters, kernel_size, strides = (1,1), batch_norm = True):
   # 3 layers in total
-
-  padding = 'valid' if strides == (2,2) else 'same';
-  
   inputs = tf.keras.Input(shape = input_shape);
-  conv = tf.keras.layers.Conv2D(filters, kernel_size = kernel_size, strides = strides, padding = padding, kernel_regularizer = tf.keras.regularizers.l2(l = 5e-4))(inputs);
+  conv = tf.keras.layers.Conv2D(filters, kernel_size = kernel_size, strides = strides, padding = 'valid' if strides == (2,2) else 'same', use_bias = False if batch_norm else True, kernel_regularizer = tf.keras.regularizers.l2(l = 5e-4))(inputs);
   bn = tf.keras.layers.BatchNormalization()(conv);
   relu = tf.keras.layers.LeakyReLU(alpha = 0.1)(bn);
   return tf.keras.Model(inputs = inputs, outputs = relu);
@@ -50,7 +47,7 @@ def Output(input_shape, input_filters, output_filters):
   cb4 = ConvBlock(cb3.shape[1:], filters = input_filters * 2, kernel_size = (3,3))(cb3);
   cb5 = ConvBlock(cb4.shape[1:], filters = input_filters, kernel_size = (1,1))(cb4);
   cb6 = ConvBlock(cb5.shape[1:], filters = input_filters * 2, kernel_size = (3,3))(cb5);
-  cb7 = ConvBlock(cb6.shape[1:], filters = output_filters, kernel_size = (1,1))(cb6);
+  cb7 = ConvBlock(cb6.shape[1:], filters = output_filters, kernel_size = (1,1), batch_norm = False)(cb6);
   return tf.keras.Model(inputs = inputs, outputs = (cb5,cb7));
 
 def YOLOv3(input_shape, class_num = 80):
