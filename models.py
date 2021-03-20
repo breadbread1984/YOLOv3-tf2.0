@@ -8,10 +8,11 @@ import tensorflow_addons as tfa;
 def ConvBlock(input_shape, filters, kernel_size, strides = (1,1), batch_norm = True):
   # 3 layers in total
   inputs = tf.keras.Input(shape = input_shape);
-  conv = tf.keras.layers.Conv2D(filters, kernel_size = kernel_size, strides = strides, padding = 'valid' if strides == (2,2) else 'same', use_bias = False if batch_norm else True, kernel_regularizer = tf.keras.regularizers.l2(l = 5e-4))(inputs);
-  bn = tf.keras.layers.BatchNormalization()(conv);
-  relu = tf.keras.layers.LeakyReLU(alpha = 0.1)(bn);
-  return tf.keras.Model(inputs = inputs, outputs = relu);
+  results = tf.keras.layers.Conv2D(filters, kernel_size = kernel_size, strides = strides, padding = 'valid' if strides == (2,2) else 'same', use_bias = False if batch_norm else True, kernel_regularizer = tf.keras.regularizers.l2(l = 5e-4))(inputs);
+  if batch_norm:
+    results = tf.keras.layers.BatchNormalization()(results);
+    results = tf.keras.layers.LeakyReLU(alpha = 0.1)(results);
+  return tf.keras.Model(inputs = inputs, outputs = results);
 
 def ResBlock(input_shape, filters, blocks):
   # 4 + 7 * blocks layers in total
