@@ -4,6 +4,7 @@ from absl import app, flags;
 from os.path import join;
 from pycocotools.coco import COCO;
 from pycocotools.cocoeval import COCOeval;
+import cv2;
 import tensorflow as tf;
 from Predictor import Predictor;
 
@@ -25,7 +26,7 @@ def main(argv):
     detections = list();
     # predict
     img_info = anno.loadImgs([imgid])[0];
-    img = cv2.imread(join(FLAGS.annotation_dir, img_info['file_name']));
+    img = cv2.imread(join(FLAGS.coco_eval_dir, img_info['file_name']));
     boundings = predictor.predict(img).numpy();
     # collect results
     for bounding in boundings:
