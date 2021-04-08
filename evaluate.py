@@ -2,7 +2,8 @@
 
 from absl import app, flags;
 from os.path import join;
-from pycocotools.coco import COCO;
+from pycocotools.coco import COCO, COCOeval;
+from Predictor import Predictor;
 
 FLAGS = flags.FLAGS;
 flags.DEFINE_string('model', 'yolov3.h5', 'path to model file to evaluate');
@@ -14,8 +15,23 @@ label_map = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, -1, 12, 13, 14, 15, 16, 17, 1
 def main(argv):
 
   yolov3 = tf.keras.models.load_model(FLAGS.model, compile = False);
+  predictor = Predictor(yolov3 = yolov3);
   anno = COCO(join(FLAGS.annotation_dir, 'instances_val2017.json'));
-  # TODO
+  for imgid in anno.getImgIds():
+    detections = list();
+    # predict
+    img_info = anno.loadImgs([imgid])[0];
+    img = cv2.imread(join(FLAGS.annotation_dir, img_info['file_name']));
+    boundings = predictor.predict(img).numpy();
+    # collect results
+    for bounding in boundings:
+      detections.append([imgid, bounding[0], bounding[1], bounding[2] - bounding[0], bounding[3] - bounding[1], bounding[4], label_map.index(int(bounding[5]) + 1)]);
+  cocoDt = anno.loadRes(np.array(detections));
+  cocoEval = COCOeval(cocoGt, cocoDt, iouType = 'bbox');
+  cocoEval.params.imgIds = anno.getImgIds();
+  cocoEval.evaluate();
+  cocoEval.accumulate();
+  cocoEval.summarize();
   
 def preprocess(image, input_shape = (416,416,3), conf_thres = 0.5, nms_thres = 0.5):
 
