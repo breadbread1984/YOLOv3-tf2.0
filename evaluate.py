@@ -4,6 +4,7 @@ from absl import app, flags;
 from os.path import join;
 from pycocotools.coco import COCO;
 from pycocotools.cocoeval import COCOeval;
+import tensorflow as tf;
 from Predictor import Predictor;
 
 FLAGS = flags.FLAGS;
