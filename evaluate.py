@@ -17,7 +17,9 @@ def main(argv):
   yolov3 = tf.keras.models.load_model(FLAGS.model, compile = False);
   predictor = Predictor(yolov3 = yolov3);
   anno = COCO(join(FLAGS.annotation_dir, 'instances_val2017.json'));
+  count = 0;
   for imgid in anno.getImgIds():
+    print("processing (%d/%d)" % (count, len(anno.getImgIds())));
     detections = list();
     # predict
     img_info = anno.loadImgs([imgid])[0];
@@ -26,13 +28,14 @@ def main(argv):
     # collect results
     for bounding in boundings:
       detections.append([imgid, bounding[0], bounding[1], bounding[2] - bounding[0], bounding[3] - bounding[1], bounding[4], label_map.index(int(bounding[5]) + 1)]);
+    count += 1;
   cocoDt = anno.loadRes(np.array(detections));
   cocoEval = COCOeval(cocoGt, cocoDt, iouType = 'bbox');
   cocoEval.params.imgIds = anno.getImgIds();
   cocoEval.evaluate();
   cocoEval.accumulate();
   cocoEval.summarize();
-  
+
 def preprocess(image, input_shape = (416,416,3), conf_thres = 0.5, nms_thres = 0.5):
 
   images = tf.expand_dims(image, axis = 0);
