@@ -2,7 +2,8 @@
 
 from absl import app, flags;
 from os.path import join;
-from pycocotools.coco import COCO, COCOeval;
+from pycocotools.coco import COCO;
+from pycocotools.cocoeval import COCOeval;
 from Predictor import Predictor;
 
 FLAGS = flags.FLAGS;
