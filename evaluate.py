@@ -39,24 +39,6 @@ def main(argv):
   cocoEval.accumulate();
   cocoEval.summarize();
 
-def preprocess(image, input_shape = (416,416,3), conf_thres = 0.5, nms_thres = 0.5):
-
-  images = tf.expand_dims(image, axis = 0);
-  resize_images = tf.image.resize(images, input_shape[:2], method = tf.image.ResizeMethod.BICUBIC, preserve_aspect_ratio = True);
-  resize_shape = resize_images.shape[1:3]
-  top_pad = (input_shape[0] - resize_shape[0]) // 2;
-  bottom_pad = input_shape[0] - resize_shape[0] - top_pad;
-  left_pad = (input_shape[1] - resize_shape[1]) // 2;
-  right_pad = input_shape[1] - resize_shape[1] - left_pad;
-  resize_images = tf.pad(resize_images,[[0,0], [top_pad,bottom_pad], [left_pad,right_pad], [0,0]], constant_values = 128);
-  deviation = tf.constant([left_pad / input_shape[1], top_pad / input_shape[0], 0, 0], dtype = tf.float32);
-  scale = tf.constant([
-    input_shape[1] / resize_shape[1], input_shape[0] / resize_shape[0],
-    input_shape[1] / resize_shape[1], input_shape[0] / resize_shape[0]
-  ], dtype = tf.float32);
-  images_data = tf.cast(resize_images, tf.float32) / 255.;
-  return images_data;
-
 if __name__ == "__main__":
 
   app.run(main);
