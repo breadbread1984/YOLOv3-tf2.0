@@ -34,7 +34,7 @@ def main(argv):
       detections.append([imgid, bounding[0], bounding[1], bounding[2] - bounding[0], bounding[3] - bounding[1], bounding[4], label_map.index(int(bounding[5]) + 1)]);
     count += 1;
   cocoDt = anno.loadRes(np.array(detections));
-  cocoEval = COCOeval(cocoGt, cocoDt, iouType = 'bbox');
+  cocoEval = COCOeval(anno, cocoDt, iouType = 'bbox');
   cocoEval.params.imgIds = anno.getImgIds();
   cocoEval.evaluate();
   cocoEval.accumulate();
