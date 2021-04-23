@@ -110,12 +110,11 @@ if __name__ == "__main__":
   boundings = predictor.predict(img);
   color_map = dict();
   for bounding in boundings:
-    if bounding[5].numpy().astype('int32') in color_map:
-      clr = color_map[bounding[5].numpy().astype('int32')];
-    else:
+    if bounding[5].numpy().astype('int32') not in color_map:
       color_map[bounding[5].numpy().astype('int32')] = tuple(np.random.randint(low=0, high=256,size=(3,)).tolist());
-      clr = color_map[bounding[5].numpy().astype('int32')];
-    cv2.rectangle(img, tuple(bounding[0:2].numpy().astype('int32')), tuple(bounding[2:4].numpy().astype('int32')), clr, 2);
+    clr = color_map[bounding[5].numpy().astype('int32')];
+    cv2.rectangle(img, tuple(bounding[0:2].numpy().astype('int32')), tuple(bounding[2:4].numpy().astype('int32')), clr, 1);
+    cv2.putText(img, predictor.getClsName(bounding[5].numpy().astype('int32')), tuple(bounding[0:2].numpy().astype('int32')), cv2.FONT_HERSHEY_PLAIN, 1, clr, 2);
   cv2.imshow('people', img);
   cv2.waitKey();
 
