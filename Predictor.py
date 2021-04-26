@@ -10,6 +10,7 @@ from models import YOLOv3, OutputParser;
 class Predictor(object):
 
   anchors = {2: [[10, 13], [16, 30], [33, 23]], 1: [[30, 61], [62, 45], [59, 119]], 0: [[116, 90], [156, 198], [373, 326]]};
+  classes = ["person","bicycle","car","motorbike","aeroplane","bus","train","truck","boat","trafficlight","firehydrant","stopsign","parkingmeter","bench","bird","cat","dog","horse","sheep","cow","elephant","bear","zebra","giraffe","backpack","umbrella","handbag","tie","suitcase","frisbee","skis","snowboard","sportsball","kite","baseballbat","baseballglove","skateboard","surfboard","tennisracket","bottle","wineglass","cup","fork","knife","spoon","bowl","banana","apple","sandwich","orange","broccoli","carrot","hotdog","pizza","donut","cake","chair","sofa","pottedplant","bed","diningtable","toilet","tvmonitor","laptop","mouse","remote","keyboard","cellphone","microwave","oven","toaster","sink","refrigerator","book","clock","vase","scissors","teddybear","hairdrier","toothbrush",];
 
   def __init__(self, input_shape = (416,416,3), class_num = 80, yolov3 = None):
 
@@ -95,6 +96,9 @@ class Predictor(object):
     down_right = (upper_left + whole_targets[..., 2:4])
     boundings = tf.keras.layers.Concatenate(axis = -1)([upper_left, down_right, whole_targets[..., 4:]]);
     return boundings;
+
+  def getClsName(self, pred_cls):
+    return self.classes[pred_cls];
 
 if __name__ == "__main__":
 
