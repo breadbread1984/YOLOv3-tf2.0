@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import tensorflow as tf;
+import tensorflow_addons as tfa;
 
 # NOTE: using functional API can save a lot of gmem
 
